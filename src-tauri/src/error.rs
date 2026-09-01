@@ -45,3 +45,11 @@ impl AppCommandError {
         }
     }
 }
+
+impl std::fmt::Display for AppCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}", self.message)
+    }
+}
+
+impl std::error::Error for AppCommandError {}
