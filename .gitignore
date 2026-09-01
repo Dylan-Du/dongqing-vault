@@ -1,0 +1,13 @@
+.superpowers/
+node_modules/
+dist/
+target/
+src-tauri/target/
+coverage/
+playwright-report/
+test-results/
+*.db
+*.db-shm
+*.db-wal
+*.domain-backup
+.DS_Store
