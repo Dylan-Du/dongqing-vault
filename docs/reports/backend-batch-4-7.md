@@ -27,3 +27,9 @@ Removed `Copy` from `AppCommandError` because it owns `String` and
 
 The successful full check and test compilation cover the Rust modules added by
 Tasks 4–7; no additional backend compile errors were observed.
+## Review fix: database reopen generation
+
+- Added `Database::reopen(path)` guarded by the exclusive maintenance gate.
+- The new connection is opened and migrated before swapping the live handle; the generation counter increments on success and the gate reopens on both success and failure.
+- Added a focused async test covering generation increment and schema availability after reopen.
+- Verification: `cargo check --manifest-path src-tauri/Cargo.toml` and `cargo test --manifest-path src-tauri/Cargo.toml db::reopen_tests` passed.

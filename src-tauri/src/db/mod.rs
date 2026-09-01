@@ -85,6 +85,31 @@ impl Database {
         self.generation.load(Ordering::Acquire)
     }
 
+    /// Replaces the live connection while the maintenance gate is exclusive.
+    /// The new connection is fully opened and migrated before the old handle is
+    /// swapped, so readers never observe a partially initialized database.
+    pub async fn reopen(&self, path: impl AsRef<Path>) -> Result<(), AppCommandError> {
+        self.gate.begin_draining();
+        let permit = self.gate.enter_exclusive().await?;
+        let path = path.as_ref().to_path_buf();
+        let opened = tokio::task::spawn_blocking(move || open_connection(&path))
+            .await
+            .map_err(join_error)?;
+
+        match opened {
+            Ok(connection) => {
+                *self.connection.lock() = connection;
+                self.generation.fetch_add(1, Ordering::AcqRel);
+                self.gate.reopen(permit);
+                Ok(())
+            }
+            Err(error) => {
+                self.gate.reopen(permit);
+                Err(error)
+            }
+        }
+    }
+
     pub fn gate(&self) -> Arc<MaintenanceGate> {
         Arc::clone(&self.gate)
     }
@@ -154,3 +179,5 @@ mod tests;
 mod catalog_tests;
 #[cfg(test)]
 mod query_tests;
+#[cfg(test)]
+mod reopen_tests;
