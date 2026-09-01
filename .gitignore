@@ -1,14 +1,32 @@
 .superpowers/
 .worktrees/
+
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+dist-ssr/
 target/
 src-tauri/target/
+src-tauri/gen/
 coverage/
 playwright-report/
 test-results/
+
+# Local data and backups
 *.db
 *.db-shm
 *.db-wal
 *.domain-backup
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# TypeScript build metadata
+*.tsbuildinfo
+
+# Operating-system files
 .DS_Store
