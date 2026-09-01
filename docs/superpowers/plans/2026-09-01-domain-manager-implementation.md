@@ -157,10 +157,12 @@ Install runtime dependencies with:
 
 ```bash
 pnpm add react react-dom @tauri-apps/api @tauri-apps/plugin-dialog @tauri-apps/plugin-opener @tanstack/react-query @tanstack/react-virtual react-hook-form @hookform/resolvers zod lucide-react clsx vgpu
-pnpm add -D typescript vite @vitejs/plugin-react @types/react @types/react-dom vitest jsdom @testing-library/react @testing-library/user-event @testing-library/jest-dom @playwright/test @axe-core/playwright @tauri-apps/cli @webgpu/types @vgpu/cli @vgpu/wgsl
+pnpm add -D typescript vite @vitejs/plugin-react @types/react @types/react-dom vitest jsdom @testing-library/react @testing-library/user-event @testing-library/jest-dom @playwright/test @axe-core/playwright @tauri-apps/cli @webgpu/types @vgpu/wgsl
 ```
 
 Set `packageManager` to the exact installed pnpm version after `pnpm --version`. Commit the generated lockfile; do not hand-edit it.
+
+`@vgpu/cli` is not published to the configured npm registry and must not be fabricated or added to the lockfile. The installed public `vgpu` package provides `pnpm exec vgpu`; keep `@vgpu/wgsl` installed for `vgpu check`.
 
 - [ ] **Step 2: Configure the Rust crate and minimal Tauri shell**
 
