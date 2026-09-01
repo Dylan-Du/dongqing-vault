@@ -38,7 +38,7 @@ export class MockNativeBridge implements NativeBridge {
   }
 
   async listSites(query: SiteQuery): Promise<SitePage> {
-    const filtered = filterSites(this.sites, query);
+    const filtered = filterSites(this.sites, query, tagNamesById(this.tags));
     const sorted = sortSites(filtered, query);
     const paged = sorted.slice(query.offset, query.offset + query.limit);
 
@@ -171,13 +171,25 @@ export class MockNativeBridge implements NativeBridge {
   }
 }
 
-function filterSites(sites: Site[], query: SiteQuery): Site[] {
+function filterSites(
+  sites: Site[],
+  query: SiteQuery,
+  tagLookup: Map<string, string[]>,
+): Site[] {
   const keyword = query.keyword.trim().toLocaleLowerCase();
 
   return sites.filter((site) => {
+    const tagKeywords = site.tagIds.flatMap((tagId) => tagLookup.get(tagId) ?? []);
     const matchesKeyword =
       keyword.length === 0 ||
-      [site.name, site.domain, site.url, site.normalizedUrl, site.notes]
+      [
+        site.name,
+        site.domain,
+        site.url,
+        site.normalizedUrl,
+        site.notes,
+        ...tagKeywords,
+      ]
         .join(" ")
         .toLocaleLowerCase()
         .includes(keyword);
@@ -195,12 +207,16 @@ function sortSites(sites: Site[], query: SiteQuery): Site[] {
   const direction = query.sortDirection === "asc" ? 1 : -1;
 
   return [...sites].sort((left, right) => {
+    if (left.isPinned !== right.isPinned) {
+      return left.isPinned ? -1 : 1;
+    }
+
     const comparison = compareByField(left, right, query.sortBy);
     if (comparison !== 0) {
       return comparison * direction;
     }
 
-    return left.name.localeCompare(right.name) || left.id.localeCompare(right.id);
+    return left.id.localeCompare(right.id);
   });
 }
 
@@ -210,10 +226,21 @@ function compareByField(
   sortBy: SiteQuery["sortBy"],
 ): number {
   if (sortBy === "status") {
-    return effectiveStatus(left).localeCompare(effectiveStatus(right));
+    return statusRank(left) - statusRank(right);
   }
 
   return String(left[sortBy]).localeCompare(String(right[sortBy]));
+}
+
+function statusRank(site: Site): number {
+  switch (effectiveStatus(site)) {
+    case "available":
+      return 0;
+    case "unchecked":
+      return 1;
+    case "unavailable":
+      return 2;
+  }
 }
 
 function summarizeSites(sites: Site[]): SitePage["summary"] {
@@ -259,4 +286,14 @@ function countTags(sites: Site[]): Map<string, number> {
   }
 
   return counts;
+}
+
+function tagNamesById(tags: TagListItem[]): Map<string, string[]> {
+  const namesById = new Map<string, string[]>();
+
+  for (const tag of tags) {
+    namesById.set(tag.id, [tag.name, tag.nameKey]);
+  }
+
+  return namesById;
 }

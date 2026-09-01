@@ -26,3 +26,15 @@
 
 - Vitest remains unverified at runtime because the test runner starts silently and does not complete in the short windows requested for this handoff.
 - `src-tauri/Cargo.toml` was modified even though it was not in the original file list, because Rust serde derives and serde_json tests require direct dependencies.
+
+## Fix Round 1
+
+- Updated mock keyword search to include associated taxonomy tag `name` and `nameKey` values via `this.tags` and each site's `tagIds`, using the same trim/case-insensitive matching as other keyword fields.
+- Updated mock sorting so pinned rows always stay first, field comparisons obey `sortDirection`, tie-breaks are always `id` ascending, and status uses the planned rank `available -> unchecked -> unavailable`.
+- Added deterministic tests covering associated tag `name` and `nameKey` keyword search, pinned-first plus `id ASC` tie-breaks, and status asc/desc ordering with pinned rows still first.
+
+### Fix Round 1 Verification
+
+- `CI=true node_modules/.bin/vitest run src/infrastructure/bridge/MockNativeBridge.test.ts` ended after about 31 seconds with exit 127 because `node` was not on PATH (`node_modules/.bin/vitest: line 53: exec: node: not found`).
+- With the bundled Node runtime on PATH, the same Vitest command produced no output for about 55 seconds and was interrupted with exit 130; no assertion result was emitted.
+- With the bundled Node runtime on PATH, `CI=true node_modules/.bin/tsc -b --pretty false --force` completed in about 30 seconds with exit 0 and no diagnostics.
