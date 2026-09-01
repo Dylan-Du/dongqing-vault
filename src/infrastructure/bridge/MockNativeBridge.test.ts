@@ -289,6 +289,25 @@ describe("TauriNativeBridge", () => {
 
     expect(calls).toEqual([{ command: "list_sites", args: { input: query } }]);
   });
+
+  it("passes opener URLs as the command's top-level urls argument", async () => {
+    const calls: Array<{
+      command: string;
+      args: Record<string, unknown> | undefined;
+    }> = [];
+    const bridge = new TauriNativeBridge(async <T,>(
+      command: string,
+      args?: Record<string, unknown>,
+    ) => {
+      calls.push({ command, args });
+      return undefined as T;
+    });
+    const urls = ["https://example.com/", "https://rust-lang.org/"];
+
+    await bridge.openUrls(urls);
+
+    expect(calls).toEqual([{ command: "open_urls", args: { urls } }]);
+  });
 });
 
 describe("BridgeContext", () => {

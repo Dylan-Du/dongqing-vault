@@ -48,8 +48,12 @@ export class TauriNativeBridge implements NativeBridge {
     return this.call("list_taxonomy", {});
   }
 
-  openUrls(urls: string[]): Promise<void> {
-    return this.call("open_urls", { urls });
+  async openUrls(urls: string[]): Promise<void> {
+    try {
+      await this.invokeFn<void>("open_urls", { urls });
+    } catch (error) {
+      throw toAppCommandError(error);
+    }
   }
 
   private async call<T>(command: string, input: unknown): Promise<T> {

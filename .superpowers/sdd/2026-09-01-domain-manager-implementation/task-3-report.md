@@ -29,3 +29,14 @@
 
 - The TypeScript assertions are covered by the committed Vitest suite and the successful direct 17-vector harness, but the Vitest runner itself remains unverified in this environment because of the existing silent startup hang.
 - Task 3 keeps its fine-grained serializable `AppError` at the URL-normalization boundary instead of changing Task 2's shared bridge error contract outside this task's file scope.
+
+## Fix Round 1: Align opener bridge payload
+
+- Verified the integration mismatch: `TauriNativeBridge.openUrls()` passed `{ urls }` through the generic `call()` helper, which wrapped it as `{ input: { urls } }`, while the Rust `open_urls` command expects the top-level Tauri argument `{ urls }`.
+- Added a bridge regression test asserting the exact `open_urls` command and `{ urls }` payload.
+- Changed only `openUrls()` to invoke Tauri directly with `{ urls }`, preserving the existing `AppCommandError` conversion behavior.
+
+### Fix Round 1 Verification
+
+- Focused Vitest command for the new regression test emitted no output for 20 seconds and was interrupted with exit 130, matching the previously documented runner hang.
+- The first focused TS 7 command failed immediately with TS5112 because explicit files require `--ignoreConfig`; rerunning with `--ignoreConfig` passed with exit 0 and no diagnostics for `MockNativeBridge.test.ts` and `TauriNativeBridge.ts`.
