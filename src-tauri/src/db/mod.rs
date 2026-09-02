@@ -92,9 +92,13 @@ impl Database {
         self.gate.begin_draining();
         let permit = self.gate.enter_exclusive().await?;
         let path = path.as_ref().to_path_buf();
-        let opened = tokio::task::spawn_blocking(move || open_connection(&path))
-            .await
-            .map_err(join_error)?;
+        let opened = match tokio::task::spawn_blocking(move || open_connection(&path)).await {
+            Ok(result) => result,
+            Err(error) => {
+                self.gate.reopen(permit);
+                return Err(join_error(error));
+            }
+        };
 
         match opened {
             Ok(connection) => {

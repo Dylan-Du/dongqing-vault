@@ -33,3 +33,5 @@ Tasks 4–7; no additional backend compile errors were observed.
 - The new connection is opened and migrated before swapping the live handle; the generation counter increments on success and the gate reopens on both success and failure.
 - Added a focused async test covering generation increment and schema availability after reopen.
 - Verification: `cargo check --manifest-path src-tauri/Cargo.toml` and `cargo test --manifest-path src-tauri/Cargo.toml db::reopen_tests` passed.
+- Reopen worker join failures now release the exclusive maintenance permit before returning, so a panicked database worker cannot permanently strand the gate.
+- Final verification after the fix: `cargo check --manifest-path src-tauri/Cargo.toml` passed and the full suite reports 18 passed, 0 failed.
