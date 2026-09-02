@@ -121,6 +121,7 @@ export function App() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const healthRef = useRef<Record<string, Partial<Site>>>({});
   const launchCheckDone = useRef(false);
+  const loadRequestRef = useRef(0);
 
   const query = useMemo(
     () =>
@@ -143,9 +144,11 @@ export function App() {
   }, []);
 
   const loadCatalog = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
     try {
       const [page, nextTaxonomy] = await Promise.all([bridge.listSites(query), bridge.listTaxonomy()]);
+      if (requestId !== loadRequestRef.current) return;
       const mergedSites = page.items.map((site) => ({ ...site, ...(healthRef.current[site.id] ?? {}) }));
       setSites(mergedSites);
       setTotal(page.total);
@@ -153,9 +156,11 @@ export function App() {
       setTaxonomy(nextTaxonomy);
       setSelectedIds((current) => current.filter((id) => mergedSites.some((site) => site.id === id)));
     } catch (error) {
-      notify(error instanceof Error ? error.message : "加载收藏库失败", "error");
+      if (requestId === loadRequestRef.current) {
+        notify(error instanceof Error ? error.message : "加载收藏库失败", "error");
+      }
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   }, [bridge, notify, query]);
 
@@ -477,8 +482,8 @@ export function App() {
         tags={taxonomy.tags}
         activeCategory={activeCategory}
         activeTag={activeTag}
-        setActiveCategory={(id) => { setActiveCategory(id); setActiveTag(null); setView("all"); }}
-        setActiveTag={(id) => { setActiveTag(id); setActiveCategory(null); setView("all"); }}
+        setActiveCategory={(id) => { setActiveCategory(id); setActiveTag(null); if (id !== null) setView("all"); }}
+        setActiveTag={(id) => { setActiveTag(id); setActiveCategory(null); if (id !== null) setView("all"); }}
         counts={{ total, pinned: pinnedCount, attention: attentionCount, unchecked: uncheckedCount }}
         onAdd={() => openEditor()}
         onTaxonomy={() => setTaxonomyOpen(true)}
@@ -576,7 +581,7 @@ function Sidebar(props: {
 }) {
   return (
     <aside className="sidebar">
-      <div className="brand-row"><div className="brand-mark">D</div><div><h1 className="brand-title">网站收藏库</h1><span className="brand-subtitle">LOCAL DOMAIN VAULT</span></div></div>
+      <div className="brand-row"><div className="brand-mark">V</div><div><h1 className="brand-title">东青Vault</h1><span className="brand-subtitle">LINKS, READY.</span></div></div>
       <button className="add-site-button" type="button" onClick={props.onAdd}><Plus size={16} />添加网站</button>
       <div className="side-section">
         <div className="side-section-title">收藏库</div>
@@ -597,7 +602,7 @@ function Sidebar(props: {
       </div>
       <div className="sidebar-spacer" />
       <div className="storage-status"><Database size={15} /><span>数据仅存储在本机</span></div>
-      <div className="sidebar-footer"><button className="ghost-icon-button" type="button" title="帮助" onClick={() => window.alert("DOMAIN. 是一个本地网站收藏管理工具。所有数据保存在当前设备。") }><CircleHelp size={15} /></button><button className="ghost-icon-button" type="button" title="设置" onClick={props.onSettings}><Settings2 size={15} /></button></div>
+      <div className="sidebar-footer"><button className="ghost-icon-button" type="button" title="帮助" onClick={() => window.alert("东青Vault 是一个本地网站收藏管理工具。所有数据保存在当前设备。") }><CircleHelp size={15} /></button><button className="ghost-icon-button" type="button" title="设置" onClick={props.onSettings}><Settings2 size={15} /></button></div>
     </aside>
   );
 }

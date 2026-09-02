@@ -21,7 +21,7 @@ pub fn run() {
 
             let show_item = MenuItemBuilder::with_id("show", "显示主窗口").build(app)?;
             let check_item = MenuItemBuilder::with_id("check", "立即检测全部").build(app)?;
-            let quit_item = MenuItemBuilder::with_id("quit", "退出 DOMAIN.").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "退出东青Vault").build(app)?;
             let tray_menu = MenuBuilder::new(app)
                 .items(&[&show_item, &check_item, &quit_item])
                 .build()?;
