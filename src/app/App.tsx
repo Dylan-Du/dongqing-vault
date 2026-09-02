@@ -369,13 +369,36 @@ export function App() {
     if (!file) return;
     try {
       const text = await file.text();
-      const rows = parseImportRows(text, file.name.toLocaleLowerCase().endsWith(".csv"));
+      const document = parseImportDocument(text, file.name.toLocaleLowerCase().endsWith(".csv"));
+      const rows = document.rows;
       if (!rows.length) throw new Error("文件中没有可导入的网站记录");
       const categoryMap = new Map(taxonomy.categories.map((item) => [item.nameKey, item.id]));
       const tagMap = new Map(taxonomy.tags.map((item) => [item.nameKey, item.id]));
+      const categoryIdMap = new Map<string, string>();
+      const tagIdMap = new Map<string, string>();
+      for (const definition of document.categories) {
+        const key = definition.name.trim().toLocaleLowerCase();
+        const existing = categoryMap.get(key);
+        const category = existing ? null : await bridge.createCategory({ name: definition.name, color: definition.color || "#4F7CFF" });
+        const resolvedId = existing ?? category?.id;
+        if (resolvedId) {
+          categoryMap.set(key, resolvedId);
+          categoryIdMap.set(definition.id, resolvedId);
+        }
+      }
+      for (const definition of document.tags) {
+        const key = definition.name.trim().toLocaleLowerCase();
+        const existing = tagMap.get(key);
+        const tag = existing ? null : await bridge.createTag({ name: definition.name, color: definition.color || "#11A683" });
+        const resolvedId = existing ?? tag?.id;
+        if (resolvedId) {
+          tagMap.set(key, resolvedId);
+          tagIdMap.set(definition.id, resolvedId);
+        }
+      }
       let imported = 0;
       for (const row of rows) {
-        let categoryId: string | null = row.categoryId ?? null;
+        let categoryId: string | null = row.categoryId ? categoryIdMap.get(row.categoryId) ?? row.categoryId : null;
         if (!categoryId && row.category) {
           const key = row.category.trim().toLocaleLowerCase();
           categoryId = categoryMap.get(key) ?? null;
@@ -390,6 +413,7 @@ export function App() {
           const key = tag.trim().toLocaleLowerCase();
           if (!key) continue;
           let tagId = tagMap.get(key);
+          if (!tagId) tagId = tagIdMap.get(tag);
           if (!tagId) {
             const created = await bridge.createTag({ name: tag.trim(), color: "#11A683" });
             tagId = created.id;
@@ -644,9 +668,17 @@ function buildCsv(sites: Site[], taxonomy: TaxonomySnapshot): string { const cat
 function csvCell(value: string): string { return `"${value.replaceAll("\"", "\"\"")}"`; }
 
 interface ImportRow { name: string; domain: string; url: string; category: string; categoryId: string | null; tags: string[]; notes: string; isPinned: boolean; manualStatus: ManualStatus; }
-function parseImportRows(text: string, csv: boolean): ImportRow[] {
-  if (csv) { const [header, ...rows] = parseCsv(text); if (!header) return []; const keys = header.map((item) => item.trim()); return rows.filter((row) => row.some(Boolean)).map((row) => { const record = Object.fromEntries(keys.map((key, index) => [key, row[index] ?? ""])); return importRecord(record); }); }
-  const parsed: unknown = JSON.parse(text); const source = Array.isArray(parsed) ? parsed : typeof parsed === "object" && parsed !== null && Array.isArray((parsed as { sites?: unknown }).sites) ? (parsed as { sites: unknown[] }).sites : []; return source.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null).map(importRecord);
+interface TaxonomyDefinition { id: string; name: string; color: string; }
+interface ImportDocument { rows: ImportRow[]; categories: TaxonomyDefinition[]; tags: TaxonomyDefinition[]; }
+function parseImportDocument(text: string, csv: boolean): ImportDocument {
+  if (csv) { const [header, ...rows] = parseCsv(text); if (!header) return { rows: [], categories: [], tags: [] }; const keys = header.map((item) => item.trim()); return { rows: rows.filter((row) => row.some(Boolean)).map((row) => { const record = Object.fromEntries(keys.map((key, index) => [key, row[index] ?? ""])); return importRecord(record); }), categories: [], tags: [] }; }
+  const parsed: unknown = JSON.parse(text);
+  if (Array.isArray(parsed)) return { rows: parsed.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null).map(importRecord), categories: [], tags: [] };
+  if (typeof parsed !== "object" || parsed === null) return { rows: [], categories: [], tags: [] };
+  const document = parsed as { sites?: unknown; categories?: unknown; tags?: unknown };
+  const rows = Array.isArray(document.sites) ? document.sites.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null).map(importRecord) : [];
+  const mapDefinition = (value: unknown, fallbackColor: string): TaxonomyDefinition[] => Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null).map((item) => ({ id: String(item.id ?? ""), name: String(item.name ?? ""), color: String(item.color ?? fallbackColor) })).filter((item) => item.name.length > 0) : [];
+  return { rows, categories: mapDefinition(document.categories, "#4F7CFF"), tags: mapDefinition(document.tags, "#11A683") };
 }
 function importRecord(record: Record<string, unknown>): ImportRow { const tagsValue = record.tags ?? record.tagNames ?? ""; const tags = Array.isArray(tagsValue) ? tagsValue.map(String) : String(tagsValue).split(/[|,，]/).map((item) => item.trim()).filter(Boolean); const status = String(record.manualStatus ?? ""); return { name: String(record.name ?? ""), domain: String(record.domain ?? ""), url: String(record.url ?? record.normalizedUrl ?? ""), category: String(record.category ?? record.categoryName ?? ""), categoryId: typeof record.categoryId === "string" ? record.categoryId : null, tags, notes: String(record.notes ?? ""), isPinned: record.isPinned === true || String(record.isPinned).toLocaleLowerCase() === "true", manualStatus: status === "available" || status === "unavailable" ? status : null }; }
 function parseCsv(text: string): string[][] { const rows: string[][] = []; let row: string[] = []; let cell = ""; let quoted = false; for (let index = 0; index < text.length; index += 1) { const character = text[index]; const next = text[index + 1]; if (character === '"' && quoted && next === '"') { cell += '"'; index += 1; } else if (character === '"') quoted = !quoted; else if (character === "," && !quoted) { row.push(cell); cell = ""; } else if ((character === "\n" || character === "\r") && !quoted) { if (character === "\r" && next === "\n") index += 1; row.push(cell); rows.push(row); row = []; cell = ""; } else cell += character; } if (cell.length || row.length) { row.push(cell); rows.push(row); } return rows; }
