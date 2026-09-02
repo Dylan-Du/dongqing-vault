@@ -85,3 +85,15 @@ export function needsAttention(site: Site): boolean {
     (site.autoStatus !== "available" || site.failureStreak > 0)
   );
 }
+
+export function hasManualOverride(site: Site): boolean {
+  return site.manualStatus !== null;
+}
+
+export function willResetStatus(site: Site, nextUrl: string): boolean {
+  const input = nextUrl.trim();
+  const candidate = /^[A-Za-z][A-Za-z0-9+.-]*:/.test(input)
+    ? input
+    : `https://${input}`;
+  return new URL(candidate).toString() !== site.normalizedUrl;
+}

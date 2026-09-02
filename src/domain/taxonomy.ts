@@ -22,3 +22,11 @@ export interface TaxonomySnapshot {
   categories: CategoryListItem[];
   tags: TagListItem[];
 }
+
+export function taxonomyNameKey(name: string): string {
+  const key = name.trim().normalize("NFKC").toLocaleLowerCase();
+  if (key.length === 0) {
+    throw new Error("Taxonomy name cannot be empty.");
+  }
+  return key;
+}

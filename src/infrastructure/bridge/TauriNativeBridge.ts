@@ -8,7 +8,7 @@ import type {
   SiteQuery,
   UpdateSiteInput,
 } from "../../domain/site";
-import type { TaxonomySnapshot } from "../../domain/taxonomy";
+import type { Category, Tag, TaxonomySnapshot } from "../../domain/taxonomy";
 import type { NativeBridge } from "./NativeBridge";
 import { toAppCommandError } from "./NativeBridge";
 
@@ -48,6 +48,30 @@ export class TauriNativeBridge implements NativeBridge {
     return this.call("list_taxonomy", {});
   }
 
+  createCategory(input: { name: string; color: string }): Promise<Category> {
+    return this.call("create_category", input);
+  }
+
+  updateCategory(input: { id: string; name: string; color: string }): Promise<Category> {
+    return this.call("update_category", input);
+  }
+
+  deleteCategory(id: string): Promise<{ affectedSites: number }> {
+    return this.invokeCommand("delete_category", { id });
+  }
+
+  createTag(input: { name: string; color: string }): Promise<Tag> {
+    return this.call("create_tag", input);
+  }
+
+  updateTag(input: { id: string; name: string; color: string }): Promise<Tag> {
+    return this.call("update_tag", input);
+  }
+
+  deleteTag(id: string): Promise<{ affectedSites: number }> {
+    return this.invokeCommand("delete_tag", { id });
+  }
+
   async openUrls(urls: string[]): Promise<void> {
     try {
       await this.invokeFn<void>("open_urls", { urls });
@@ -57,8 +81,12 @@ export class TauriNativeBridge implements NativeBridge {
   }
 
   private async call<T>(command: string, input: unknown): Promise<T> {
+    return this.invokeCommand(command, { input });
+  }
+
+  private async invokeCommand<T>(command: string, args: Record<string, unknown>): Promise<T> {
     try {
-      return await this.invokeFn<T>(command, { input });
+      return await this.invokeFn<T>(command, args);
     } catch (error) {
       throw toAppCommandError(error);
     }

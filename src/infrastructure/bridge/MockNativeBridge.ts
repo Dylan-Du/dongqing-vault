@@ -8,15 +8,19 @@ import {
   type SiteQuery,
   type UpdateSiteInput,
 } from "../../domain/site";
+import { normalizeSiteQuery } from "../../domain/site-query";
 import type {
+  Category,
   CategoryListItem,
   TagListItem,
   TaxonomySnapshot,
+  Tag,
 } from "../../domain/taxonomy";
+import { taxonomyNameKey } from "../../domain/taxonomy";
 import type { NativeBridge } from "./NativeBridge";
 import { createAppCommandError } from "./NativeBridge";
 
-interface MockNativeBridgeState {
+export interface MockNativeBridgeState {
   sites?: Site[];
   categories?: CategoryListItem[];
   tags?: TagListItem[];
@@ -37,10 +41,19 @@ export class MockNativeBridge implements NativeBridge {
     this.tags = (state.tags ?? []).map(cloneTag);
   }
 
+  snapshot(): MockNativeBridgeState {
+    return {
+      sites: this.sites.map(cloneSite),
+      categories: this.categories.map(cloneCategory),
+      tags: this.tags.map(cloneTag),
+    };
+  }
+
   async listSites(query: SiteQuery): Promise<SitePage> {
-    const filtered = filterSites(this.sites, query, tagNamesById(this.tags));
-    const sorted = sortSites(filtered, query);
-    const paged = sorted.slice(query.offset, query.offset + query.limit);
+    const normalizedQuery = normalizeSiteQuery(query);
+    const filtered = filterSites(this.sites, normalizedQuery, tagNamesById(this.tags));
+    const sorted = sortSites(filtered, normalizedQuery);
+    const paged = sorted.slice(normalizedQuery.offset, normalizedQuery.offset + normalizedQuery.limit);
 
     return {
       items: paged.map(cloneSite),
@@ -60,12 +73,14 @@ export class MockNativeBridge implements NativeBridge {
 
   async createSite(input: CreateSiteInput): Promise<Site> {
     const now = FIXED_NOW;
+    const normalizedUrl = normalizeMockUrl(input.url);
+    const hostname = new URL(normalizedUrl).hostname;
     const site: Site = {
       id: `mock-site-${this.nextId++}`,
-      name: input.name,
-      domain: input.domain,
-      url: input.url,
-      normalizedUrl: input.url,
+      name: input.name.trim() || hostname,
+      domain: input.domain.trim() || hostname,
+      url: normalizedUrl,
+      normalizedUrl,
       notes: input.notes,
       categoryId: input.categoryId,
       tagIds: [...input.tagIds],
@@ -103,18 +118,30 @@ export class MockNativeBridge implements NativeBridge {
       );
     }
 
+    const normalizedUrl = normalizeMockUrl(input.url);
+    const urlChanged = normalizedUrl !== current.normalizedUrl;
+    const hostname = new URL(normalizedUrl).hostname;
     const updated: Site = {
       ...current,
-      name: input.name,
-      domain: input.domain,
-      url: input.url,
-      normalizedUrl: input.url,
+      name: input.name.trim() || hostname,
+      domain: input.domain.trim() || hostname,
+      url: normalizedUrl,
+      normalizedUrl,
       notes: input.notes,
       categoryId: input.categoryId,
       tagIds: [...input.tagIds],
       isPinned: input.isPinned,
-      manualStatus: input.manualStatus,
+      manualStatus: urlChanged ? null : input.manualStatus,
       updatedAt: FIXED_NOW,
+      autoStatus: urlChanged ? "unchecked" : current.autoStatus,
+      failureStreak: urlChanged ? 0 : current.failureStreak,
+      lastCheckedAt: urlChanged ? null : current.lastCheckedAt,
+      lastSuccessAt: urlChanged ? null : current.lastSuccessAt,
+      lastCheckSource: urlChanged ? null : current.lastCheckSource,
+      lastHttpStatus: urlChanged ? null : current.lastHttpStatus,
+      lastResponseMs: urlChanged ? null : current.lastResponseMs,
+      lastCheckError: urlChanged ? null : current.lastCheckError,
+      urlRevision: current.urlRevision + (urlChanged ? 1 : 0),
       rowRevision: current.rowRevision + 1,
     };
 
@@ -166,9 +193,84 @@ export class MockNativeBridge implements NativeBridge {
     };
   }
 
+  async createCategory(input: { name: string; color: string }): Promise<Category> {
+    return this.createTaxonomy(this.categories, input);
+  }
+
+  async updateCategory(input: { id: string; name: string; color: string }): Promise<Category> {
+    return this.updateTaxonomy(this.categories, input);
+  }
+
+  async deleteCategory(id: string): Promise<{ affectedSites: number }> {
+    const affectedSites = this.sites.filter((site) => site.categoryId === id).length;
+    const before = this.categories.length;
+    this.categories = this.categories.filter((item) => item.id !== id);
+    if (this.categories.length === before) throw createAppCommandError("not_found", `Category ${id} was not found.`);
+    this.sites = this.sites.map((site) => site.categoryId === id ? { ...site, categoryId: null } : site);
+    return { affectedSites };
+  }
+
+  async createTag(input: { name: string; color: string }): Promise<Tag> {
+    return this.createTaxonomy(this.tags, input);
+  }
+
+  async updateTag(input: { id: string; name: string; color: string }): Promise<Tag> {
+    return this.updateTaxonomy(this.tags, input);
+  }
+
+  async deleteTag(id: string): Promise<{ affectedSites: number }> {
+    const affectedSites = this.sites.filter((site) => site.tagIds.includes(id)).length;
+    const before = this.tags.length;
+    this.tags = this.tags.filter((item) => item.id !== id);
+    if (this.tags.length === before) throw createAppCommandError("not_found", `Tag ${id} was not found.`);
+    this.sites = this.sites.map((site) => ({ ...site, tagIds: site.tagIds.filter((tagId) => tagId !== id) }));
+    return { affectedSites };
+  }
+
+  private async createTaxonomy(collection: CategoryListItem[], input: { name: string; color: string }): Promise<Category> {
+    const nameKey = taxonomyNameKey(input.name);
+    if (collection.some((item) => item.nameKey === nameKey)) throw createAppCommandError("conflict", `Taxonomy name ${input.name} already exists.`);
+    const timestamp = FIXED_NOW;
+    const item: CategoryListItem = {
+      id: `mock-taxonomy-${this.nextId++}`,
+      name: input.name.trim().normalize("NFKC"),
+      nameKey,
+      color: normalizeColor(input.color),
+      sortIndex: collection.reduce((maximum, entry) => Math.max(maximum, entry.sortIndex), -1) + 1,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      siteCount: 0,
+    };
+    collection.push(item);
+    return cloneCategory(item);
+  }
+
+  private async updateTaxonomy(collection: CategoryListItem[], input: { id: string; name: string; color: string }): Promise<Category> {
+    const index = collection.findIndex((item) => item.id === input.id);
+    if (index === -1) throw createAppCommandError("not_found", `Taxonomy ${input.id} was not found.`);
+    const nameKey = taxonomyNameKey(input.name);
+    if (collection.some((item, itemIndex) => itemIndex !== index && item.nameKey === nameKey)) throw createAppCommandError("conflict", `Taxonomy name ${input.name} already exists.`);
+    collection[index] = { ...collection[index], name: input.name.trim().normalize("NFKC"), nameKey, color: normalizeColor(input.color), updatedAt: FIXED_NOW };
+    return cloneCategory(collection[index]);
+  }
+
   async openUrls(urls: string[]): Promise<void> {
     this.openedUrls.push(...urls);
   }
+}
+
+function normalizeColor(color: string): string {
+  if (!/^#[0-9A-Fa-f]{6}$/.test(color)) throw createAppCommandError("validation", "Color must be a six-digit hexadecimal value.");
+  return color.toUpperCase();
+}
+
+function normalizeMockUrl(raw: string): string {
+  const input = raw.trim();
+  const candidate = /^[A-Za-z][A-Za-z0-9+.-]*:/.test(input) ? input : `https://${input}`;
+  const parsed = new URL(candidate);
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw createAppCommandError("unsafe_url", "Only HTTP and HTTPS URLs are allowed.");
+  if (parsed.username || parsed.password) throw createAppCommandError("unsafe_url", "Credentials are not allowed in URLs.");
+  return parsed.toString();
 }
 
 function filterSites(

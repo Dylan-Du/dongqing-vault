@@ -108,3 +108,83 @@ async fn migration_is_idempotent_and_corrupt_file_is_preserved() {
     assert_eq!(error.code, AppCommandErrorCode::Database);
     assert_eq!(fs::read(corrupt_path).unwrap(), bytes);
 }
+
+#[tokio::test]
+async fn reopen_swaps_valid_connection_and_increments_generation() {
+    let directory = tempdir().unwrap();
+    let current_path = directory.path().join("current.sqlite3");
+    let replacement_path = directory.path().join("replacement.sqlite3");
+    let database = Database::open(&current_path).await.unwrap();
+    database
+        .write(|connection| {
+            connection.execute(
+                "INSERT INTO app_settings (key, value, updated_at) VALUES ('source', 'current', 'now')",
+                [],
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+    let replacement = Database::open(&replacement_path).await.unwrap();
+    replacement
+        .write(|connection| {
+            connection.execute(
+                "INSERT INTO app_settings (key, value, updated_at) VALUES ('source', 'replacement', 'now')",
+                [],
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    drop(replacement);
+
+    assert_eq!(database.generation(), 1);
+    database.reopen(&replacement_path).await.unwrap();
+    assert_eq!(database.generation(), 2);
+    let source = database
+        .read(|connection| {
+            connection.query_row(
+                "SELECT value FROM app_settings WHERE key = 'source'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+        })
+        .await
+        .unwrap();
+    assert_eq!(source, "replacement");
+}
+
+#[tokio::test]
+async fn reopen_rejects_invalid_connection_without_swapping_or_incrementing() {
+    let directory = tempdir().unwrap();
+    let current_path = directory.path().join("current.sqlite3");
+    let invalid_path = directory.path().join("invalid.sqlite3");
+    let database = Database::open(&current_path).await.unwrap();
+    database
+        .write(|connection| {
+            connection.execute(
+                "INSERT INTO app_settings (key, value, updated_at) VALUES ('source', 'current', 'now')",
+                [],
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    fs::write(&invalid_path, b"not a sqlite database").unwrap();
+
+    let error = database.reopen(&invalid_path).await.unwrap_err();
+    assert_eq!(error.code, AppCommandErrorCode::Database);
+    assert_eq!(database.generation(), 1);
+    let source = database
+        .read(|connection| {
+            connection.query_row(
+                "SELECT value FROM app_settings WHERE key = 'source'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+        })
+        .await
+        .unwrap();
+    assert_eq!(source, "current");
+}

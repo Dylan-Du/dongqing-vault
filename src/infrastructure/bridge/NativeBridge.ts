@@ -6,7 +6,7 @@ import type {
   SiteQuery,
   UpdateSiteInput,
 } from "../../domain/site";
-import type { TaxonomySnapshot } from "../../domain/taxonomy";
+import type { Category, Tag, TaxonomySnapshot } from "../../domain/taxonomy";
 
 export type AppCommandErrorCode =
   | "validation"
@@ -34,6 +34,12 @@ export interface NativeBridge {
   deleteSites(ids: string[]): Promise<DeletedSiteSnapshot[]>;
   restoreSites(snapshots: DeletedSiteSnapshot[]): Promise<void>;
   listTaxonomy(): Promise<TaxonomySnapshot>;
+  createCategory(input: { name: string; color: string }): Promise<Category>;
+  updateCategory(input: { id: string; name: string; color: string }): Promise<Category>;
+  deleteCategory(id: string): Promise<{ affectedSites: number }>;
+  createTag(input: { name: string; color: string }): Promise<Tag>;
+  updateTag(input: { id: string; name: string; color: string }): Promise<Tag>;
+  deleteTag(id: string): Promise<{ affectedSites: number }>;
   openUrls(urls: string[]): Promise<void>;
 }
 
