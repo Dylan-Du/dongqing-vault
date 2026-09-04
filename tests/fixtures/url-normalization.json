@@ -1,0 +1,88 @@
+[
+  {
+    "input": "example.com",
+    "url": "https://example.com/",
+    "normalized": "https://example.com/",
+    "hostname": "example.com"
+  },
+  {
+    "input": "HTTP://Example.COM:80",
+    "url": "http://example.com/",
+    "normalized": "http://example.com/",
+    "hostname": "example.com"
+  },
+  {
+    "input": "https://example.com/a/",
+    "url": "https://example.com/a/",
+    "normalized": "https://example.com/a/",
+    "hostname": "example.com"
+  },
+  {
+    "input": "https://例子.测试/路径?q=1#片段",
+    "url": "https://xn--fsqu00a.xn--0zwm56d/%E8%B7%AF%E5%BE%84?q=1#%E7%89%87%E6%AE%B5",
+    "normalized": "https://xn--fsqu00a.xn--0zwm56d/%E8%B7%AF%E5%BE%84?q=1#%E7%89%87%E6%AE%B5",
+    "hostname": "xn--fsqu00a.xn--0zwm56d"
+  },
+  {
+    "input": "javascript:alert(1)",
+    "error": "unsafe_url"
+  },
+  {
+    "input": "https://user:pass@example.com",
+    "error": "credentials_not_allowed"
+  },
+  {
+    "input": "http://example.com",
+    "url": "http://example.com/",
+    "normalized": "http://example.com/",
+    "hostname": "example.com"
+  },
+  {
+    "input": "https://example.com",
+    "url": "https://example.com/",
+    "normalized": "https://example.com/",
+    "hostname": "example.com"
+  },
+  {
+    "input": "https://example.com:443",
+    "url": "https://example.com/",
+    "normalized": "https://example.com/",
+    "hostname": "example.com"
+  },
+  {
+    "input": "https://example.com/a",
+    "url": "https://example.com/a",
+    "normalized": "https://example.com/a",
+    "hostname": "example.com"
+  },
+  {
+    "input": "https://example.com/path?b=2&a=1#x",
+    "url": "https://example.com/path?b=2&a=1#x",
+    "normalized": "https://example.com/path?b=2&a=1#x",
+    "hostname": "example.com"
+  },
+  {
+    "input": "file:///tmp/index.html",
+    "error": "unsafe_url"
+  },
+  {
+    "input": "data:text/html,hello",
+    "error": "unsafe_url"
+  },
+  {
+    "input": "https://exa mple.com",
+    "error": "invalid_host"
+  },
+  {
+    "input": "https://[::1",
+    "error": "invalid_host"
+  },
+  {
+    "input": "",
+    "error": "empty_url"
+  },
+  {
+    "input": "   ",
+    "error": "empty_url"
+  }
+]
