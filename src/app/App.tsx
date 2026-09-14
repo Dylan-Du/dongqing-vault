@@ -350,6 +350,17 @@ export function App() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
 
+  // Refresh the catalog when the page becomes visible again (tray reveal /
+  // dock reopen), so the list is never stale after staying hidden in the tray.
+  useEffect(() => {
+    const onDocumentVisible = () => {
+      if (document.visibilityState === "visible") void loadCatalog();
+    };
+    document.addEventListener("visibilitychange", onDocumentVisible);
+    return () => document.removeEventListener("visibilitychange", onDocumentVisible);
+  }, [loadCatalog]);
+
+
   const toggleSelected = (id: string) => {
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   };
@@ -501,6 +512,7 @@ export function App() {
           </div>
         </header>
 
+        <div className="content-scroll">
         <section className="page-intro">
           <div>
             <p className="eyebrow">DOMAIN / LOCAL COLLECTION</p>
@@ -553,6 +565,7 @@ export function App() {
           </div>
           {!loading && visibleSites.length > 0 && <div className="table-footer"><span>显示 {visibleSites.length} 条，共 {total} 条</span><span>数据保存在本机 · {settings.autoCheck ? `${settings.intervalMinutes} 分钟自动检测` : "自动检测已暂停"}</span></div>}
         </section>
+        </div>
       </main>
 
       <input ref={importInputRef} type="file" accept=".json,.csv,application/json,text/csv" onChange={(event) => void importFile(event)} hidden />
@@ -581,28 +594,33 @@ function Sidebar(props: {
 }) {
   return (
     <aside className="sidebar">
-      <div className="brand-row"><div className="brand-mark">V</div><div><h1 className="brand-title">东青Vault</h1><span className="brand-subtitle">LINKS, READY.</span></div></div>
-      <button className="add-site-button" type="button" onClick={props.onAdd}><Plus size={16} />添加网站</button>
-      <div className="side-section">
-        <div className="side-section-title">收藏库</div>
-        <nav className="side-nav">
-          <SidebarNavItem icon={<LayoutGrid size={15} />} label="所有网站" count={props.counts.total} active={props.view === "all" && !props.activeCategory && !props.activeTag} onClick={() => { props.setView("all"); props.setActiveCategory(null); props.setActiveTag(null); }} />
-          <SidebarNavItem icon={<Star size={15} />} label="置顶收藏" count={props.counts.pinned} active={props.view === "pinned"} onClick={() => { props.setView("pinned"); props.setActiveCategory(null); props.setActiveTag(null); }} />
-          <SidebarNavItem icon={<AlertCircle size={15} />} label="需要关注" count={props.counts.attention} active={props.view === "attention"} onClick={() => { props.setView("attention"); props.setActiveCategory(null); props.setActiveTag(null); }} />
-          <SidebarNavItem icon={<CircleDashed size={15} />} label="待检测" count={props.counts.unchecked} active={props.view === "unchecked"} onClick={() => { props.setView("unchecked"); props.setActiveCategory(null); props.setActiveTag(null); }} />
-        </nav>
+      <div className="sidebar-fixed">
+        <div className="brand-row"><div className="brand-mark">V</div><div><h1 className="brand-title">东青Vault</h1><span className="brand-subtitle">LINKS, READY.</span></div></div>
+        <button className="add-site-button" type="button" onClick={props.onAdd}><Plus size={16} />添加网站</button>
       </div>
-      <div className="side-section">
-        <div className="side-section-title"><span>分类</span><button type="button" title="管理分类" onClick={props.onTaxonomy}><FolderPlus size={14} /></button></div>
-        <div className="taxonomy-list">{props.categories.map((category) => <TaxonomySideItem key={category.id} item={category} active={props.activeCategory === category.id} onClick={() => props.setActiveCategory(category.id)} onDelete={() => void props.onDeleteTaxonomy("category", category)} />)}</div>
+      <div className="sidebar-scroll">
+        <div className="side-section">
+          <div className="side-section-title">收藏库</div>
+          <nav className="side-nav">
+            <SidebarNavItem icon={<LayoutGrid size={15} />} label="所有网站" count={props.counts.total} active={props.view === "all" && !props.activeCategory && !props.activeTag} onClick={() => { props.setView("all"); props.setActiveCategory(null); props.setActiveTag(null); }} />
+            <SidebarNavItem icon={<Star size={15} />} label="置顶收藏" count={props.counts.pinned} active={props.view === "pinned"} onClick={() => { props.setView("pinned"); props.setActiveCategory(null); props.setActiveTag(null); }} />
+            <SidebarNavItem icon={<AlertCircle size={15} />} label="需要关注" count={props.counts.attention} active={props.view === "attention"} onClick={() => { props.setView("attention"); props.setActiveCategory(null); props.setActiveTag(null); }} />
+            <SidebarNavItem icon={<CircleDashed size={15} />} label="待检测" count={props.counts.unchecked} active={props.view === "unchecked"} onClick={() => { props.setView("unchecked"); props.setActiveCategory(null); props.setActiveTag(null); }} />
+          </nav>
+        </div>
+        <div className="side-section">
+          <div className="side-section-title"><span>分类</span><button type="button" title="管理分类" onClick={props.onTaxonomy}><FolderPlus size={14} /></button></div>
+          <div className="taxonomy-list">{props.categories.map((category) => <TaxonomySideItem key={category.id} item={category} active={props.activeCategory === category.id} onClick={() => props.setActiveCategory(category.id)} onDelete={() => void props.onDeleteTaxonomy("category", category)} />)}</div>
+        </div>
+        <div className="side-section">
+          <div className="side-section-title"><span>标签</span><button type="button" title="管理标签" onClick={props.onTaxonomy}><TagIcon size={14} /></button></div>
+          <div className="taxonomy-list">{props.tags.map((tag) => <TaxonomySideItem key={tag.id} item={tag} active={props.activeTag === tag.id} onClick={() => props.setActiveTag(tag.id)} onDelete={() => void props.onDeleteTaxonomy("tag", tag)} />)}</div>
+        </div>
       </div>
-      <div className="side-section">
-        <div className="side-section-title"><span>标签</span><button type="button" title="管理标签" onClick={props.onTaxonomy}><TagIcon size={14} /></button></div>
-        <div className="taxonomy-list">{props.tags.map((tag) => <TaxonomySideItem key={tag.id} item={tag} active={props.activeTag === tag.id} onClick={() => props.setActiveTag(tag.id)} onDelete={() => void props.onDeleteTaxonomy("tag", tag)} />)}</div>
+      <div className="sidebar-fixed sidebar-bottom">
+        <div className="storage-status"><Database size={15} /><span>数据仅存储在本机</span></div>
+        <div className="sidebar-footer"><button className="ghost-icon-button" type="button" title="帮助" onClick={() => window.alert("东青Vault 是一个本地网站收藏管理工具。所有数据保存在当前设备。") }><CircleHelp size={15} /></button><button className="ghost-icon-button" type="button" title="设置" onClick={props.onSettings}><Settings2 size={15} /></button></div>
       </div>
-      <div className="sidebar-spacer" />
-      <div className="storage-status"><Database size={15} /><span>数据仅存储在本机</span></div>
-      <div className="sidebar-footer"><button className="ghost-icon-button" type="button" title="帮助" onClick={() => window.alert("东青Vault 是一个本地网站收藏管理工具。所有数据保存在当前设备。") }><CircleHelp size={15} /></button><button className="ghost-icon-button" type="button" title="设置" onClick={props.onSettings}><Settings2 size={15} /></button></div>
     </aside>
   );
 }

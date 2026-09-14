@@ -13,7 +13,7 @@ use tauri::{
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .setup(|app| {
             let database_path = app.path().app_data_dir()?.join("data.sqlite3");
             let database = tauri::async_runtime::block_on(db::Database::open(database_path))?;
@@ -75,7 +75,23 @@ pub fn run() {
                 api.prevent_close();
                 let _ = window.hide();
             }
-        })
+        });
+
+    #[cfg(target_os = "macos")]
+    let app = builder.build(tauri::generate_context!()).expect("error while building tauri application");
+
+    #[cfg(target_os = "macos")]
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::Reopen { has_visible_windows, .. } = event {
+            // macOS: clicking the Dock icon or re-launching must reveal the hidden window.
+            if !has_visible_windows {
+                show_main_window(app_handle);
+            }
+        }
+    });
+
+    #[cfg(not(target_os = "macos"))]
+    builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -83,6 +99,7 @@ pub fn run() {
 fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
+        let _ = window.unminimize();
         let _ = window.set_focus();
     }
 }
