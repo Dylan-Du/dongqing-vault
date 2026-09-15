@@ -71,6 +71,18 @@ export interface UpdateSiteInput extends CreateSiteInput {
   expectedRowRevision: number;
 }
 
+export interface HealthCheckResultInput {
+  id: string;
+  expectedUrlRevision: number;
+  autoStatus: Exclude<AutoStatus, "unchecked">;
+  failureStreak: 0 | 1 | 2;
+  checkedAt: string;
+  source: "scheduled" | "manual";
+  httpStatus: number | null;
+  responseMs: number;
+  error: string | null;
+}
+
 export interface DeletedSiteSnapshot {
   site: Site;
 }

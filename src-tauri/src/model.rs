@@ -170,6 +170,20 @@ pub struct UpdateSiteInput {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct HealthCheckResultInput {
+    pub id: String,
+    pub expected_url_revision: u32,
+    pub auto_status: AutoStatus,
+    pub failure_streak: u8,
+    pub checked_at: String,
+    pub source: LastCheckSource,
+    pub http_status: Option<u16>,
+    pub response_ms: u32,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DeletedSiteSnapshot {
     pub site: Site,
 }

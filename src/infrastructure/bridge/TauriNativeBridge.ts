@@ -3,6 +3,7 @@ import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import type {
   CreateSiteInput,
   DeletedSiteSnapshot,
+  HealthCheckResultInput,
   Site,
   SitePage,
   SiteQuery,
@@ -34,6 +35,10 @@ export class TauriNativeBridge implements NativeBridge {
 
   updateSite(input: UpdateSiteInput): Promise<Site> {
     return this.call("update_site", input);
+  }
+
+  recordHealthChecks(results: HealthCheckResultInput[]): Promise<Site[]> {
+    return this.call("record_health_checks", results);
   }
 
   deleteSites(ids: string[]): Promise<DeletedSiteSnapshot[]> {

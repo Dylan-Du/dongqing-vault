@@ -3,7 +3,7 @@ use tauri::State;
 use crate::{
     db::CatalogRepository,
     error::AppCommandError,
-    model::{CreateSiteInput, DeletedSiteSnapshot, Site, UpdateSiteInput},
+    model::{CreateSiteInput, DeletedSiteSnapshot, HealthCheckResultInput, Site, UpdateSiteInput},
 };
 
 #[tauri::command]
@@ -19,6 +19,11 @@ pub async fn get_site(repository: State<'_, CatalogRepository>, id: String) -> R
 #[tauri::command]
 pub async fn update_site(repository: State<'_, CatalogRepository>, input: UpdateSiteInput) -> Result<Site, AppCommandError> {
     repository.update_site(input).await
+}
+
+#[tauri::command]
+pub async fn record_health_checks(repository: State<'_, CatalogRepository>, input: Vec<HealthCheckResultInput>) -> Result<Vec<Site>, AppCommandError> {
+    repository.record_health_checks(input).await
 }
 
 #[tauri::command]

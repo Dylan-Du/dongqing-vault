@@ -6,6 +6,13 @@ import { MockNativeBridge } from "../infrastructure/bridge/MockNativeBridge";
 import { siteFixture } from "../test/fixtures";
 import { App } from "./App";
 
+class WrongSummaryBridge extends MockNativeBridge {
+  override async listSites(query: SiteQuery): Promise<SitePage> {
+    const page = await super.listSites(query);
+    return { ...page, summary: { total: 999, available: 0, needsAttention: 999 } };
+  }
+}
+
 class RaceBridge extends MockNativeBridge {
   listCalls = 0;
   private releaseFirstRequest: (() => Promise<void>) | null = null;
@@ -40,6 +47,36 @@ describe("App", () => {
     render(<App />);
     expect(screen.getByRole("heading", { name: "东青Vault" })).toBeVisible();
     expect(screen.getByText("LINKS, READY.")).toBeVisible();
+  });
+
+  it("derives metric counts from visible site statuses instead of a stale bridge summary", async () => {
+    const bridge = new WrongSummaryBridge({
+      sites: [
+        siteFixture({ id: "available", autoStatus: "available" }),
+        siteFixture({ id: "unavailable", autoStatus: "unavailable" }),
+      ],
+    });
+    render(
+      <BridgeProvider bridge={bridge}>
+        <App />
+      </BridgeProvider>,
+    );
+
+    const overview = await screen.findByRole("region", { name: "收藏库概览" });
+    expect(overview).toHaveTextContent("收藏总数2当前筛选");
+    expect(overview).toHaveTextContent("可用网站150% 可用");
+    expect(overview).toHaveTextContent("需要关注1待处理");
+  });
+
+  it("updates metric counts for the currently visible special view", async () => {
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "置顶收藏 2" }));
+
+    const overview = screen.getByRole("region", { name: "收藏库概览" });
+    await waitFor(() => expect(overview).toHaveTextContent("收藏总数2当前筛选"));
+    expect(overview).toHaveTextContent("可用网站2100% 可用");
+    expect(overview).toHaveTextContent("需要关注0待处理");
   });
 
   it("filters the table to pinned sites when the pinned view is selected", async () => {

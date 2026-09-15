@@ -46,9 +46,9 @@ import {
   effectiveStatus,
   needsAttention,
   type CreateSiteInput,
+  type HealthCheckResultInput,
   type ManualStatus,
   type Site,
-  type SitePage,
   type SiteQuery,
 } from "../domain/site";
 import { normalizeSiteQuery } from "../domain/site-query";
@@ -91,7 +91,6 @@ interface AppSettings {
 
 const SETTINGS_KEY = "domain-manager.settings.v1";
 const EMPTY_TAXONOMY: TaxonomySnapshot = { categories: [], tags: [] };
-const EMPTY_SUMMARY: SitePage["summary"] = { total: 0, available: 0, needsAttention: 0 };
 const DEFAULT_SETTINGS: AppSettings = { intervalMinutes: 30, checkOnLaunch: true, autoCheck: true };
 
 export function App() {
@@ -100,7 +99,6 @@ export function App() {
   const bridge = providedBridge ?? fallbackBridge;
   const [sites, setSites] = useState<Site[]>([]);
   const [taxonomy, setTaxonomy] = useState<TaxonomySnapshot>(EMPTY_TAXONOMY);
-  const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -119,7 +117,6 @@ export function App() {
   const [lastCheckAt, setLastCheckAt] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
-  const healthRef = useRef<Record<string, Partial<Site>>>({});
   const launchCheckDone = useRef(false);
   const loadRequestRef = useRef(0);
 
@@ -129,13 +126,14 @@ export function App() {
         keyword: search,
         categoryId: activeCategory,
         tagIds: activeTag ? [activeTag] : [],
-        status: view === "unchecked" ? "unchecked" : statusFilter,
+        // Status is filtered against the live in-memory check results below.
+        status: null,
         sortBy,
         sortDirection,
         offset: 0,
         limit: 200,
       }),
-    [activeCategory, activeTag, search, sortBy, sortDirection, statusFilter, view],
+    [activeCategory, activeTag, search, sortBy, sortDirection],
   );
 
   const notify = useCallback((message: string, variant: ToastVariant = "success") => {
@@ -149,12 +147,11 @@ export function App() {
     try {
       const [page, nextTaxonomy] = await Promise.all([bridge.listSites(query), bridge.listTaxonomy()]);
       if (requestId !== loadRequestRef.current) return;
-      const mergedSites = page.items.map((site) => ({ ...site, ...(healthRef.current[site.id] ?? {}) }));
-      setSites(mergedSites);
+      const loadedSites = page.items;
+      setSites(loadedSites);
       setTotal(page.total);
-      setSummary(page.summary);
       setTaxonomy(nextTaxonomy);
-      setSelectedIds((current) => current.filter((id) => mergedSites.some((site) => site.id === id)));
+      setSelectedIds((current) => current.filter((id) => loadedSites.some((site) => site.id === id)));
     } catch (error) {
       if (requestId === loadRequestRef.current) {
         notify(error instanceof Error ? error.message : "加载收藏库失败", "error");
@@ -169,14 +166,24 @@ export function App() {
   }, [loadCatalog]);
 
   const visibleSites = useMemo(() => {
-    if (view === "pinned") return sites.filter((site) => site.isPinned);
-    if (view === "attention") return sites.filter((site) => needsAttention(site));
-    return sites;
-  }, [sites, view]);
+    let filtered = sites;
+    if (view === "pinned") filtered = filtered.filter((site) => site.isPinned);
+    if (view === "attention") filtered = filtered.filter((site) => needsAttention(site));
+    if (view === "unchecked") return filtered.filter((site) => effectiveStatus(site) === "unchecked");
+    if (statusFilter) filtered = filtered.filter((site) => effectiveStatus(site) === statusFilter);
+    return filtered;
+  }, [sites, statusFilter, view]);
 
   const pinnedCount = useMemo(() => sites.filter((site) => site.isPinned).length, [sites]);
   const attentionCount = useMemo(() => sites.filter(needsAttention).length, [sites]);
   const uncheckedCount = useMemo(() => sites.filter((site) => effectiveStatus(site) === "unchecked").length, [sites]);
+  // Derive metric cards from the currently visible rows so search/view filters
+  // and in-memory health-check results are reflected immediately and consistently.
+  const liveSummary = useMemo(() => ({
+    total: visibleSites.length,
+    available: visibleSites.filter((site) => effectiveStatus(site) === "available").length,
+    needsAttention: visibleSites.filter(needsAttention).length,
+  }), [visibleSites]);
   const pageTitle = view === "pinned" ? "置顶收藏" : view === "attention" ? "需要关注" : view === "unchecked" ? "待检测" : "所有网站";
 
   const openEditor = useCallback((site?: Site) => {
@@ -267,7 +274,7 @@ export function App() {
     [bridge, notify],
   );
 
-  const checkOne = useCallback(async (site: Site, source: "manual" | "scheduled"): Promise<Partial<Site>> => {
+  const checkOne = useCallback(async (site: Site, source: "manual" | "scheduled"): Promise<HealthCheckResultInput> => {
     const controller = new AbortController();
     const startedAt = performance.now();
     const timer = window.setTimeout(() => controller.abort(), 8000);
@@ -280,25 +287,28 @@ export function App() {
       });
       const available = response.type === "opaque" || response.ok || response.status < 500;
       return {
+        id: site.id,
+        expectedUrlRevision: site.urlRevision,
         autoStatus: available ? "available" : "unavailable",
         failureStreak: available ? 0 : Math.min(2, site.failureStreak + 1) as Site["failureStreak"],
-        lastCheckedAt: new Date().toISOString(),
-        lastSuccessAt: available ? new Date().toISOString() : site.lastSuccessAt,
-        lastCheckSource: source,
-        lastHttpStatus: response.status || null,
-        lastResponseMs: Math.round(performance.now() - startedAt),
-        lastCheckError: available ? null : `HTTP ${response.status}`,
+        checkedAt: new Date().toISOString(),
+        source,
+        httpStatus: response.status || null,
+        responseMs: Math.round(performance.now() - startedAt),
+        error: available ? null : `HTTP ${response.status}`,
       };
     } catch (error) {
       const timedOut = error instanceof DOMException && error.name === "AbortError";
       return {
+        id: site.id,
+        expectedUrlRevision: site.urlRevision,
         autoStatus: "unavailable",
         failureStreak: Math.min(2, site.failureStreak + 1) as Site["failureStreak"],
-        lastCheckedAt: new Date().toISOString(),
-        lastCheckSource: source,
-        lastHttpStatus: null,
-        lastResponseMs: Math.round(performance.now() - startedAt),
-        lastCheckError: timedOut ? "请求超时" : "无法连接",
+        checkedAt: new Date().toISOString(),
+        source,
+        httpStatus: null,
+        responseMs: Math.round(performance.now() - startedAt),
+        error: timedOut ? "请求超时" : "无法连接",
       };
     } finally {
       window.clearTimeout(timer);
@@ -310,17 +320,21 @@ export function App() {
       if (checking || sites.length === 0) return;
       setChecking(true);
       try {
-        const results = await Promise.all(sites.map(async (site) => [site.id, await checkOne(site, source)] as const));
-        const resultMap = Object.fromEntries(results) as Record<string, Partial<Site>>;
-        healthRef.current = { ...healthRef.current, ...resultMap };
-        setSites((current) => current.map((site) => ({ ...site, ...(resultMap[site.id] ?? {}) })));
+        const results = await Promise.all(sites.map((site) => checkOne(site, source)));
+        const updatedSites = await bridge.recordHealthChecks(results);
+        const resultMap = Object.fromEntries(updatedSites.map((site) => [site.id, site])) as Record<string, Site>;
+        setSites((current) => current.map((site) => resultMap[site.id] ?? site));
         setLastCheckAt(new Date().toISOString());
-        if (source === "manual") notify(`已完成 ${results.length} 个网址检测`);
+        if (source === "manual") notify(`已完成 ${updatedSites.length} 个网址检测`);
+      } catch (error) {
+        if (source === "manual") {
+          notify(error instanceof Error ? error.message : "保存检测结果失败", "error");
+        }
       } finally {
         setChecking(false);
       }
     },
-    [checkOne, checking, notify, sites],
+    [bridge, checkOne, checking, notify, sites],
   );
 
   useEffect(() => {
@@ -523,9 +537,9 @@ export function App() {
         </section>
 
         <section className="metrics" aria-label="收藏库概览">
-          <MetricCard icon={<LayoutGrid size={15} />} label="收藏总数" value={summary.total} note="当前筛选" />
-          <MetricCard icon={<CheckCircle2 size={15} />} label="可用网站" value={summary.available} note={summary.total ? `${Math.round(summary.available / summary.total * 100)}% 可用` : "暂无数据"} tone="success" />
-          <MetricCard icon={<AlertCircle size={15} />} label="需要关注" value={summary.needsAttention} note="待处理" tone="warning" />
+          <MetricCard icon={<LayoutGrid size={15} />} label="收藏总数" value={liveSummary.total} note="当前筛选" />
+          <MetricCard icon={<CheckCircle2 size={15} />} label="可用网站" value={liveSummary.available} note={liveSummary.total ? `${Math.round(liveSummary.available / liveSummary.total * 100)}% 可用` : "暂无数据"} tone="success" />
+          <MetricCard icon={<AlertCircle size={15} />} label="需要关注" value={liveSummary.needsAttention} note="待处理" tone="warning" />
         </section>
 
         <section className="collection-card">

@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::{
     error::{AppCommandError, AppCommandErrorCode},
-    model::{AutoStatus, CreateSiteInput, DeletedSiteSnapshot, LastCheckSource, ManualStatus, Site, UpdateSiteInput},
+    model::{AutoStatus, CreateSiteInput, DeletedSiteSnapshot, HealthCheckResultInput, LastCheckSource, ManualStatus, Site, UpdateSiteInput},
     url_normalizer::normalize_url,
 };
 
@@ -99,6 +99,32 @@ impl CatalogRepository {
             Ok(Mutation::Value(current))
         }).await?;
         mutation_result(outcome)
+    }
+
+    pub async fn record_health_checks(&self, results: Vec<HealthCheckResultInput>) -> Result<Vec<Site>, AppCommandError> {
+        self.database().write(move |connection| {
+            let transaction = connection.transaction()?;
+            let mut updated = Vec::new();
+            for result in results {
+                if matches!(result.auto_status, AutoStatus::Unchecked) || result.failure_streak > 2 {
+                    continue;
+                }
+                let last_success_at = if matches!(result.auto_status, AutoStatus::Available) {
+                    Some(result.checked_at.as_str())
+                } else {
+                    None
+                };
+                let changed = transaction.execute(
+                    "UPDATE sites SET auto_status=?1,failure_streak=?2,last_checked_at=?3,last_success_at=COALESCE(?4,last_success_at),last_check_source=?5,last_http_status=?6,last_response_ms=?7,last_check_error=?8,row_revision=row_revision+1 WHERE id=?9 AND url_revision=?10",
+                    params![status(&result.auto_status), result.failure_streak, result.checked_at, last_success_at, source_value(&result.source), result.http_status, result.response_ms, result.error, result.id, result.expected_url_revision],
+                )?;
+                if changed > 0 {
+                    if let Some(site) = load_site(&transaction, &result.id)? { updated.push(site); }
+                }
+            }
+            transaction.commit()?;
+            Ok(updated)
+        }).await
     }
 
     pub async fn delete_sites(&self, ids: Vec<String>) -> Result<Vec<DeletedSiteSnapshot>, AppCommandError> {
@@ -217,7 +243,8 @@ pub(crate) fn site_from_row(row: &Row<'_>) -> rusqlite::Result<Site> {
 
 pub(crate) fn status(value: &AutoStatus) -> &'static str { match value { AutoStatus::Unchecked => "unchecked", AutoStatus::Available => "available", AutoStatus::Unavailable => "unavailable" } }
 fn manual_status(value: &Option<ManualStatus>) -> Option<&'static str> { value.as_ref().map(|value| match value { ManualStatus::Available => "available", ManualStatus::Unavailable => "unavailable" }) }
-fn source(value: &Option<LastCheckSource>) -> Option<&'static str> { value.as_ref().map(|value| match value { LastCheckSource::Scheduled => "scheduled", LastCheckSource::Manual => "manual" }) }
+fn source(value: &Option<LastCheckSource>) -> Option<&'static str> { value.as_ref().map(source_value) }
+fn source_value(value: &LastCheckSource) -> &'static str { match value { LastCheckSource::Scheduled => "scheduled", LastCheckSource::Manual => "manual" } }
 fn parse_auto(value: String) -> AutoStatus { match value.as_str() { "available" => AutoStatus::Available, "unavailable" => AutoStatus::Unavailable, _ => AutoStatus::Unchecked } }
 fn parse_manual(value: String) -> ManualStatus { if value == "available" { ManualStatus::Available } else { ManualStatus::Unavailable } }
 fn parse_source(value: String) -> LastCheckSource { if value == "scheduled" { LastCheckSource::Scheduled } else { LastCheckSource::Manual } }

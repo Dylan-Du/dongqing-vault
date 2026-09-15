@@ -3,6 +3,7 @@ import {
   needsAttention,
   type CreateSiteInput,
   type DeletedSiteSnapshot,
+  type HealthCheckResultInput,
   type Site,
   type SitePage,
   type SiteQuery,
@@ -147,6 +148,30 @@ export class MockNativeBridge implements NativeBridge {
 
     this.sites[index] = cloneSite(updated);
     return cloneSite(updated);
+  }
+
+  async recordHealthChecks(results: HealthCheckResultInput[]): Promise<Site[]> {
+    const updated: Site[] = [];
+    for (const result of results) {
+      const index = this.sites.findIndex((site) => site.id === result.id);
+      if (index === -1 || this.sites[index].urlRevision !== result.expectedUrlRevision) continue;
+      const current = this.sites[index];
+      const next: Site = {
+        ...current,
+        autoStatus: result.autoStatus,
+        failureStreak: result.failureStreak,
+        lastCheckedAt: result.checkedAt,
+        lastSuccessAt: result.autoStatus === "available" ? result.checkedAt : current.lastSuccessAt,
+        lastCheckSource: result.source,
+        lastHttpStatus: result.httpStatus,
+        lastResponseMs: result.responseMs,
+        lastCheckError: result.error,
+        rowRevision: current.rowRevision + 1,
+      };
+      this.sites[index] = cloneSite(next);
+      updated.push(cloneSite(next));
+    }
+    return updated;
   }
 
   async deleteSites(ids: string[]): Promise<DeletedSiteSnapshot[]> {

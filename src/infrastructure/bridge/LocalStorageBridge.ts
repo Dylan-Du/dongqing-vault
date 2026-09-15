@@ -1,6 +1,7 @@
 import type {
   CreateSiteInput,
   DeletedSiteSnapshot,
+  HealthCheckResultInput,
   Site,
   UpdateSiteInput,
 } from "../../domain/site";
@@ -37,6 +38,12 @@ export class LocalStorageBridge extends MockNativeBridge {
     const result = await super.updateSite(input);
     this.persist();
     return result;
+  }
+
+  override async recordHealthChecks(results: HealthCheckResultInput[]): Promise<Site[]> {
+    const updated = await super.recordHealthChecks(results);
+    this.persist();
+    return updated;
   }
 
   override async deleteSites(ids: string[]): Promise<DeletedSiteSnapshot[]> {

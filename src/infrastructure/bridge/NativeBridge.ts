@@ -1,6 +1,7 @@
 import type {
   CreateSiteInput,
   DeletedSiteSnapshot,
+  HealthCheckResultInput,
   Site,
   SitePage,
   SiteQuery,
@@ -31,6 +32,7 @@ export interface NativeBridge {
   getSite(id: string): Promise<Site>;
   createSite(input: CreateSiteInput): Promise<Site>;
   updateSite(input: UpdateSiteInput): Promise<Site>;
+  recordHealthChecks(results: HealthCheckResultInput[]): Promise<Site[]>;
   deleteSites(ids: string[]): Promise<DeletedSiteSnapshot[]>;
   restoreSites(snapshots: DeletedSiteSnapshot[]): Promise<void>;
   listTaxonomy(): Promise<TaxonomySnapshot>;

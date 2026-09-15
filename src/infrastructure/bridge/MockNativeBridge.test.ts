@@ -238,6 +238,30 @@ describe("MockNativeBridge", () => {
   });
 });
 
+describe("health result persistence", () => {
+  it("applies results only when the checked URL revision is still current", async () => {
+    const bridge = new MockNativeBridge({
+      sites: [siteFixture({ id: "checked", autoStatus: "unchecked", urlRevision: 2 })],
+    });
+    const result = {
+      id: "checked",
+      autoStatus: "available" as const,
+      failureStreak: 0 as const,
+      checkedAt: "2026-01-02T00:00:00.000Z",
+      source: "manual" as const,
+      httpStatus: 200,
+      responseMs: 100,
+      error: null,
+    };
+
+    expect(await bridge.recordHealthChecks([{ ...result, expectedUrlRevision: 1 }])).toEqual([]);
+    const updated = await bridge.recordHealthChecks([{ ...result, expectedUrlRevision: 2 }]);
+
+    expect(updated[0]).toMatchObject({ autoStatus: "available", lastHttpStatus: 200, rowRevision: 2 });
+    expect((await bridge.getSite("checked")).autoStatus).toBe("available");
+  });
+});
+
 describe("site status helpers", () => {
   it("uses manual status as the effective status when present", () => {
     expect(

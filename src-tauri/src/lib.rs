@@ -66,6 +66,7 @@ pub fn run() {
             commands::sites::create_site,
             commands::sites::get_site,
             commands::sites::update_site,
+            commands::sites::record_health_checks,
             commands::sites::delete_sites,
             commands::sites::restore_sites,
             commands::query::list_sites,
