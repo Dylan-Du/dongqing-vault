@@ -14,6 +14,10 @@ import {
   Check,
   CheckCircle2,
   CircleDashed,
+  Copy,
+  Eye,
+  EyeOff,
+  KeyRound,
   CircleHelp,
   Clock3,
   Database,
@@ -71,6 +75,10 @@ interface DraftForm {
   domain: string;
   url: string;
   notes: string;
+  username: string;
+  password: string;
+  passwordDirty: boolean;
+  hasPassword: boolean;
   categoryId: string | null;
   tagIds: string[];
   isPinned: boolean;
@@ -203,17 +211,19 @@ export function App() {
         return;
       }
       try {
-        if (editor.siteId && editor.expectedRowRevision !== null) {
-          await bridge.updateSite({
-            id: editor.siteId,
-            expectedRowRevision: editor.expectedRowRevision,
-            ...editor.form,
-          });
-          notify("网站信息已更新");
-        } else {
-          await bridge.createSite(editor.form);
-          notify("网站已加入收藏库");
+        const { password, passwordDirty, hasPassword: _hasPassword, ...siteInput } = editor.form;
+        const savedSite = editor.siteId && editor.expectedRowRevision !== null
+          ? await bridge.updateSite({
+              id: editor.siteId,
+              expectedRowRevision: editor.expectedRowRevision,
+              ...siteInput,
+            })
+          : await bridge.createSite(siteInput);
+        if (passwordDirty) {
+          if (password) await bridge.setSitePassword(savedSite.id, password);
+          else if (savedSite.hasPassword || editor.form.hasPassword) await bridge.deleteSitePassword(savedSite.id);
         }
+        notify(editor.siteId ? "网站信息已更新" : "网站已加入收藏库");
         setEditor(null);
         await loadCatalog();
       } catch (error) {
@@ -233,6 +243,7 @@ export function App() {
           domain: site.domain,
           url: site.url,
           notes: site.notes,
+          username: site.username,
           categoryId: site.categoryId,
           tagIds: site.tagIds,
           isPinned: site.isPinned,
@@ -261,6 +272,29 @@ export function App() {
     },
     [bridge, loadCatalog, notify],
   );
+
+  const revealEditorPassword = useCallback(async () => {
+    if (!editor?.siteId || !editor.form.hasPassword || editor.form.password) return false;
+    try {
+      const password = await bridge.getSitePassword(editor.siteId);
+      setEditor((current) => current?.siteId === editor.siteId ? { ...current, form: { ...current.form, password } } : current);
+      return true;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "读取密码失败", "error");
+      return false;
+    }
+  }, [bridge, editor, notify]);
+
+  const copyCredential = useCallback(async (site: Site, kind: "username" | "password") => {
+    try {
+      const value = kind === "username" ? site.username : await bridge.getSitePassword(site.id);
+      if (!value) { notify(kind === "username" ? "该网站未保存账号" : "该网站未保存密码", "error"); return; }
+      await navigator.clipboard.writeText(value);
+      notify(kind === "username" ? "账号已复制" : "密码已复制");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "复制失败", "error");
+    }
+  }, [bridge, notify]);
 
   const openSite = useCallback(
     async (site: Site) => {
@@ -460,6 +494,7 @@ export function App() {
           tagIds,
           isPinned: row.isPinned,
           manualStatus: row.manualStatus,
+          username: "",
         });
         imported += 1;
       }
@@ -573,7 +608,7 @@ export function App() {
             {loading ? <LoadingRows /> : visibleSites.length === 0 ? <EmptyState onAdd={() => openEditor()} hasFilters={Boolean(search || activeCategory || activeTag || statusFilter || view !== "all")} /> : (
               <table className="site-table">
                 <thead><tr><th><input className="check-control" type="checkbox" checked={visibleSites.length > 0 && selectedIds.length === visibleSites.length} onChange={toggleAll} aria-label="全选" /></th><th>网站</th><th>分类</th><th>状态</th><th>标签</th><th>操作</th></tr></thead>
-                <tbody>{visibleSites.map((site) => <SiteRow key={site.id} site={site} categories={taxonomy.categories} tags={taxonomy.tags} selected={selectedIds.includes(site.id)} onToggle={() => toggleSelected(site.id)} onOpen={() => void openSite(site)} onEdit={() => openEditor(site)} onDelete={() => void removeSites([site.id])} onPin={() => void updateSite(site, { isPinned: !site.isPinned })} />)}</tbody>
+                <tbody>{visibleSites.map((site) => <SiteRow key={site.id} site={site} categories={taxonomy.categories} tags={taxonomy.tags} selected={selectedIds.includes(site.id)} onToggle={() => toggleSelected(site.id)} onOpen={() => void openSite(site)} onEdit={() => openEditor(site)} onDelete={() => void removeSites([site.id])} onPin={() => void updateSite(site, { isPinned: !site.isPinned })} onCopyUsername={() => void copyCredential(site, "username")} onCopyPassword={() => void copyCredential(site, "password")} />)}</tbody>
               </table>
             )}
           </div>
@@ -583,7 +618,7 @@ export function App() {
       </main>
 
       <input ref={importInputRef} type="file" accept=".json,.csv,application/json,text/csv" onChange={(event) => void importFile(event)} hidden />
-      {editor && <EditorDrawer editor={editor} categories={taxonomy.categories} tags={taxonomy.tags} onChange={(form) => setEditor((current) => current ? { ...current, form } : current)} onClose={() => setEditor(null)} onSave={saveSite} />}
+      {editor && <EditorDrawer editor={editor} categories={taxonomy.categories} tags={taxonomy.tags} onChange={(form) => setEditor((current) => current ? { ...current, form } : current)} onClose={() => setEditor(null)} onSave={saveSite} onRevealPassword={revealEditorPassword} />}
       {settingsOpen && <SettingsDialog settings={settings} onChange={(next) => setSettings(next)} onBackup={backup} onImport={() => importInputRef.current?.click()} onClose={() => setSettingsOpen(false)} />}
       {taxonomyOpen && <TaxonomyDialog categories={taxonomy.categories} tags={taxonomy.tags} onAdd={addTaxonomy} onDelete={deleteTaxonomy} onClose={() => setTaxonomyOpen(false)} />}
       {toast && <div className={`toast ${toast.variant}`} role="status">{toast.variant === "success" ? <CheckCircle2 size={15} /> : <XCircle size={15} />}{toast.message}</div>}
@@ -651,17 +686,17 @@ function MetricCard({ icon, label, value, note, tone }: { icon: ReactNode; label
   return <div className={`metric-card ${tone ?? ""}`}><div className="metric-label">{icon}{label}</div><div className="metric-value">{value}</div><span className="metric-note">{note}</span></div>;
 }
 
-function SiteRow({ site, categories, tags, selected, onToggle, onOpen, onEdit, onDelete, onPin }: { site: Site; categories: CategoryListItem[]; tags: TagListItem[]; selected: boolean; onToggle: () => void; onOpen: () => void; onEdit: () => void; onDelete: () => void; onPin: () => void }) {
+function SiteRow({ site, categories, tags, selected, onToggle, onOpen, onEdit, onDelete, onPin, onCopyUsername, onCopyPassword }: { site: Site; categories: CategoryListItem[]; tags: TagListItem[]; selected: boolean; onToggle: () => void; onOpen: () => void; onEdit: () => void; onDelete: () => void; onPin: () => void; onCopyUsername: () => void; onCopyPassword: () => void }) {
   const category = categories.find((item) => item.id === site.categoryId);
   const status = effectiveStatus(site);
   const initials = site.name.trim().slice(0, 1).toUpperCase() || "W";
   return <tr>
     <td><input className="check-control" type="checkbox" checked={selected} onChange={onToggle} aria-label={`选择 ${site.name}`} /></td>
-    <td><div className="site-name-cell"><div className="site-favicon">{initials}</div><div className="site-name-block"><div className="site-name"><span>{site.name}</span>{site.isPinned && <Star className="pin-icon" size={11} fill="currentColor" />}</div><div className="site-domain" title={site.domain}>{site.domain}</div></div></div></td>
+    <td><div className="site-name-cell"><div className="site-favicon">{initials}</div><div className="site-name-block"><div className="site-name"><span>{site.name}</span>{site.isPinned && <Star className="pin-icon" size={11} fill="currentColor" />}</div><div className="site-domain" title={site.domain}>{site.domain}</div>{(site.username || site.hasPassword) && <div className="credential-summary"><KeyRound size={11} />{site.username || "已保存密码"}</div>}</div></div></td>
     <td>{category ? <span className="category-label"><span className="taxonomy-dot" style={{ background: category.color }} />{category.name}</span> : <span className="category-label">未分类</span>}</td>
     <td><span className={`status-pill ${status}`}>{status === "available" ? "可用" : status === "unavailable" ? "失效" : "未检测"}</span>{site.manualStatus && <span className="manual-mark">手动</span>}</td>
     <td><div className="tag-list">{site.tagIds.map((id) => { const tag = tags.find((item) => item.id === id); return tag ? <span className="tag-chip" style={{ "--chip-color": tag.color } as React.CSSProperties} key={id}>{tag.name}</span> : null; })}</div></td>
-    <td><div className="row-actions"><button className="row-action" type="button" title="打开网址" onClick={onOpen}><ExternalLink size={14} /></button><button className="row-action" type="button" title={site.isPinned ? "取消置顶" : "置顶"} onClick={onPin}><Star size={14} fill={site.isPinned ? "currentColor" : "none"} /></button><button className="row-action" type="button" title="编辑" onClick={onEdit}><Pencil size={14} /></button><button className="row-action danger" type="button" title="删除" onClick={onDelete}><Trash2 size={14} /></button></div></td>
+    <td><div className="row-actions">{site.username && <button className="row-action credential-action" type="button" title="复制账号" onClick={onCopyUsername}><Copy size={14} /></button>}{site.hasPassword && <button className="row-action credential-action" type="button" title="复制密码" onClick={onCopyPassword}><KeyRound size={14} /></button>}<button className="row-action" type="button" title="打开网址" onClick={onOpen}><ExternalLink size={14} /></button><button className="row-action" type="button" title={site.isPinned ? "取消置顶" : "置顶"} onClick={onPin}><Star size={14} fill={site.isPinned ? "currentColor" : "none"} /></button><button className="row-action" type="button" title="编辑" onClick={onEdit}><Pencil size={14} /></button><button className="row-action danger" type="button" title="删除" onClick={onDelete}><Trash2 size={14} /></button></div></td>
   </tr>;
 }
 
@@ -673,9 +708,29 @@ function EmptyState({ onAdd, hasFilters }: { onAdd: () => void; hasFilters: bool
   return <div className="empty-state"><div className="empty-icon">{hasFilters ? <Search size={20} /> : <Sparkles size={20} />}</div><h3>{hasFilters ? "没有匹配的网站" : "收藏库还是空的"}</h3><p>{hasFilters ? "试试调整筛选条件或搜索关键词。" : "把常用网站收进来，下一次访问会更快。"}</p>{!hasFilters && <button type="button" onClick={onAdd}><Plus size={13} /> 添加第一个网站</button>}</div>;
 }
 
-function EditorDrawer({ editor, categories, tags, onChange, onClose, onSave }: { editor: EditorState; categories: CategoryListItem[]; tags: TagListItem[]; onChange: (form: DraftForm) => void; onClose: () => void; onSave: (event: FormEvent<HTMLFormElement>) => void }) {
+function EditorDrawer({ editor, categories, tags, onChange, onClose, onSave, onRevealPassword }: { editor: EditorState; categories: CategoryListItem[]; tags: TagListItem[]; onChange: (form: DraftForm) => void; onClose: () => void; onSave: (event: FormEvent<HTMLFormElement>) => void; onRevealPassword: () => Promise<boolean> }) {
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const set = (patch: Partial<DraftForm>) => onChange({ ...editor.form, ...patch });
-  return <div className="modal-backdrop drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="drawer" role="dialog" aria-modal="true" aria-labelledby="editor-title"><div className="drawer-header"><div><h2 id="editor-title">{editor.siteId ? "编辑网站" : "添加网站"}</h2><p>网站信息保存在本机，不会上传到云端。</p></div><button className="close-button" type="button" onClick={onClose} aria-label="关闭"><X size={16} /></button></div><form onSubmit={onSave}><div className="form-grid"><div className="form-field"><label htmlFor="site-name">网站名称</label><input id="site-name" value={editor.form.name} onChange={(event) => set({ name: event.target.value })} placeholder="例如：GitHub" /></div><div className="form-field"><label htmlFor="site-domain">域名</label><input id="site-domain" value={editor.form.domain} onChange={(event) => set({ domain: event.target.value })} placeholder="例如：github.com" /></div><div className="form-field full"><label htmlFor="site-url">网址 <span className="form-hint">支持自动补全 https://</span></label><input id="site-url" value={editor.form.url} onChange={(event) => set({ url: event.target.value })} placeholder="https://" required /></div><div className="form-field"><label htmlFor="site-category">分类</label><select id="site-category" value={editor.form.categoryId ?? ""} onChange={(event) => set({ categoryId: event.target.value || null })}><option value="">未分类</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div><div className="form-field"><label>手动状态覆盖</label><select value={editor.form.manualStatus ?? ""} onChange={(event) => set({ manualStatus: (event.target.value || null) as ManualStatus })}><option value="">跟随自动检测</option><option value="available">标记为可用</option><option value="unavailable">标记为失效</option></select></div><div className="form-field full"><label>标签</label><div className="tag-picker">{tags.length ? tags.map((tag) => <button className={`tag-option ${editor.form.tagIds.includes(tag.id) ? "selected" : ""}`} key={tag.id} type="button" onClick={() => set({ tagIds: editor.form.tagIds.includes(tag.id) ? editor.form.tagIds.filter((id) => id !== tag.id) : [...editor.form.tagIds, tag.id] })}>{editor.form.tagIds.includes(tag.id) && <Check size={11} />}{tag.name}</button>) : <span className="form-hint">还没有标签，可在侧栏创建。</span>}</div></div><div className="form-field full"><label htmlFor="site-notes">备注</label><textarea id="site-notes" value={editor.form.notes} onChange={(event) => set({ notes: event.target.value })} placeholder="记录用途、登录入口或补充说明…" /></div><div className="form-field full"><div className="switch-row"><div className="switch-copy"><strong>收藏置顶</strong><span>置顶后会始终显示在列表前面</span></div><label className="switch"><input type="checkbox" checked={editor.form.isPinned} onChange={(event) => set({ isPinned: event.target.checked })} /><span className="switch-track" /></label></div></div></div><div className="form-actions"><button className="secondary-button" type="button" onClick={onClose}>取消</button><button className="primary-button" type="submit">{editor.siteId ? "保存修改" : "加入收藏"}</button></div></form></section></div>;
+  const togglePassword = async () => {
+    if (!passwordVisible && editor.form.hasPassword && !editor.form.password && !await onRevealPassword()) return;
+    setPasswordVisible((current) => !current);
+  };
+  return <div className="modal-backdrop drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="drawer" role="dialog" aria-modal="true" aria-labelledby="editor-title">
+      <div className="drawer-header"><div><h2 id="editor-title">{editor.siteId ? "编辑网站" : "添加网站"}</h2><p>网站信息保存在本机，密码由 macOS 钥匙串安全保管。</p></div><button className="close-button" type="button" onClick={onClose} aria-label="关闭"><X size={16} /></button></div>
+      <form onSubmit={onSave}><div className="form-grid">
+        <div className="form-field"><label htmlFor="site-name">网站名称</label><input id="site-name" value={editor.form.name} onChange={(event) => set({ name: event.target.value })} placeholder="例如：GitHub" /></div>
+        <div className="form-field"><label htmlFor="site-domain">域名</label><input id="site-domain" value={editor.form.domain} onChange={(event) => set({ domain: event.target.value })} placeholder="例如：github.com" /></div>
+        <div className="form-field full"><label htmlFor="site-url">网址 <span className="form-hint">支持自动补全 https://</span></label><input id="site-url" value={editor.form.url} onChange={(event) => set({ url: event.target.value })} placeholder="https://" required /></div>
+        <div className="credential-section full"><div className="credential-section-title"><KeyRound size={15} /><div><strong>登录信息</strong><span>选填 · 密码保存至 macOS 钥匙串</span></div></div><div className="credential-fields"><div className="form-field"><label htmlFor="site-username">账号</label><input id="site-username" value={editor.form.username} onChange={(event) => set({ username: event.target.value })} placeholder="邮箱或用户名" autoComplete="username" /></div><div className="form-field"><label htmlFor="site-password">密码</label><div className="password-input"><input id="site-password" type={passwordVisible ? "text" : "password"} value={editor.form.password} onChange={(event) => set({ password: event.target.value, passwordDirty: true })} placeholder={editor.form.hasPassword ? "••••••••（已保存）" : "可不填写"} autoComplete="new-password" /><button type="button" title={passwordVisible ? "隐藏密码" : "显示密码"} onClick={() => void togglePassword()}>{passwordVisible ? <EyeOff size={15} /> : <Eye size={15} />}</button></div>{editor.form.hasPassword && <button className="clear-password" type="button" onClick={() => set({ password: "", passwordDirty: true, hasPassword: false })}>删除已保存密码</button>}</div></div></div>
+        <div className="form-field"><label htmlFor="site-category">分类</label><select id="site-category" value={editor.form.categoryId ?? ""} onChange={(event) => set({ categoryId: event.target.value || null })}><option value="">未分类</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
+        <div className="form-field"><label>手动状态覆盖</label><select value={editor.form.manualStatus ?? ""} onChange={(event) => set({ manualStatus: (event.target.value || null) as ManualStatus })}><option value="">跟随自动检测</option><option value="available">标记为可用</option><option value="unavailable">标记为失效</option></select></div>
+        <div className="form-field full"><label>标签</label><div className="tag-picker">{tags.length ? tags.map((tag) => <button className={editor.form.tagIds.includes(tag.id) ? "selected" : ""} type="button" key={tag.id} onClick={() => set({ tagIds: editor.form.tagIds.includes(tag.id) ? editor.form.tagIds.filter((id) => id !== tag.id) : [...editor.form.tagIds, tag.id] })}><span style={{ background: tag.color }} />{tag.name}</button>) : <span className="form-hint">还没有标签</span>}</div></div>
+        <div className="form-field full"><label htmlFor="site-notes">备注</label><textarea id="site-notes" value={editor.form.notes} onChange={(event) => set({ notes: event.target.value })} rows={4} placeholder="记录用途、登录方式或其他说明…" /></div>
+        <label className="checkbox-row full"><input type="checkbox" checked={editor.form.isPinned} onChange={(event) => set({ isPinned: event.target.checked })} /><span>置顶这个网站</span></label>
+      </div><div className="form-actions"><button type="button" onClick={onClose}>取消</button><button className="primary-button" type="submit"><Check size={14} />保存网站</button></div></form>
+    </section>
+  </div>;
 }
 
 function SettingsDialog({ settings, onChange, onBackup, onImport, onClose }: { settings: AppSettings; onChange: (settings: AppSettings) => void; onBackup: () => void; onImport: () => void; onClose: () => void }) {
@@ -694,8 +749,8 @@ function TaxonomyColumn({ title, items, name, setName, color, setColor, onAdd, o
   return <div className="taxonomy-column"><h3>{title}<span>{items.length}</span></h3><ul>{items.map((item) => <li key={item.id}><span className="taxonomy-dot" style={{ background: item.color }} />{item.name}<span className="side-count">{item.siteCount}</span><button type="button" title={`删除${title}`} onClick={() => onDelete(item)}><Trash2 size={12} /></button></li>)}</ul><div className="inline-add"><input value={name} onChange={(event) => setName(event.target.value)} placeholder={`新${title}`} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); onAdd(); } }} /><input className="color-input" type="color" value={color} onChange={(event) => setColor(event.target.value)} aria-label={`${title}颜色`} /><button type="button" title={`添加${title}`} onClick={onAdd}><Plus size={14} /></button></div></div>;
 }
 
-function siteToDraft(site: Site): DraftForm { return { name: site.name, domain: site.domain, url: site.url, notes: site.notes, categoryId: site.categoryId, tagIds: [...site.tagIds], isPinned: site.isPinned, manualStatus: site.manualStatus }; }
-function emptyDraft(): DraftForm { return { name: "", domain: "", url: "", notes: "", categoryId: null, tagIds: [], isPinned: false, manualStatus: null }; }
+function siteToDraft(site: Site): DraftForm { return { name: site.name, domain: site.domain, url: site.url, notes: site.notes, username: site.username, password: "", passwordDirty: false, hasPassword: site.hasPassword, categoryId: site.categoryId, tagIds: [...site.tagIds], isPinned: site.isPinned, manualStatus: site.manualStatus }; }
+function emptyDraft(): DraftForm { return { name: "", domain: "", url: "", notes: "", username: "", password: "", passwordDirty: false, hasPassword: false, categoryId: null, tagIds: [], isPinned: false, manualStatus: null }; }
 function readSettings(): AppSettings { try { const value = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "null") as Partial<AppSettings> | null; return { ...DEFAULT_SETTINGS, ...value }; } catch { return DEFAULT_SETTINGS; } }
 function formatRelative(value: string): string { const elapsed = Math.max(0, Date.now() - new Date(value).getTime()); const minutes = Math.round(elapsed / 60000); if (minutes < 1) return "刚刚"; if (minutes < 60) return `${minutes} 分钟前`; const hours = Math.round(minutes / 60); return `${hours} 小时前`; }
 function isTestEnvironment(): boolean { return typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent); }

@@ -1,0 +1,2 @@
+ALTER TABLE sites ADD COLUMN username TEXT NOT NULL DEFAULT '';
+ALTER TABLE sites ADD COLUMN has_password INTEGER NOT NULL DEFAULT 0 CHECK(has_password IN (0, 1));

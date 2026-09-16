@@ -19,7 +19,7 @@ impl CatalogRepository {
         let domain = defaulted(input.domain, &normalized.hostname);
         let mut site = Site {
             id: Uuid::new_v4().to_string(), name, domain, url: normalized.url,
-            normalized_url: normalized.normalized, notes: input.notes, category_id: input.category_id,
+            normalized_url: normalized.normalized, notes: input.notes, username: input.username.trim().to_owned(), has_password: false, category_id: input.category_id,
             tag_ids: deduplicate(input.tag_ids), is_pinned: input.is_pinned, auto_status: AutoStatus::Unchecked,
             manual_status: input.manual_status, failure_streak: 0, last_checked_at: None,
             last_success_at: None, last_check_source: None, last_http_status: None,
@@ -70,6 +70,7 @@ impl CatalogRepository {
             current.url = normalized.url;
             current.normalized_url = normalized.normalized;
             current.notes = input.notes;
+            current.username = input.username.trim().to_owned();
             current.category_id = input.category_id;
             current.tag_ids = tag_ids;
             current.is_pinned = input.is_pinned;
@@ -127,6 +128,15 @@ impl CatalogRepository {
         }).await
     }
 
+    pub async fn set_has_password(&self, id: &str, has_password: bool) -> Result<Site, AppCommandError> {
+        let id = id.to_owned();
+        let changed = self.database().write(move |connection| {
+            connection.execute("UPDATE sites SET has_password=?1,row_revision=row_revision+1 WHERE id=?2", params![has_password, id])?;
+            load_site(connection, &id)
+        }).await?;
+        changed.ok_or_else(|| AppCommandError::new(AppCommandErrorCode::NotFound, "Site was not found."))
+    }
+
     pub async fn delete_sites(&self, ids: Vec<String>) -> Result<Vec<DeletedSiteSnapshot>, AppCommandError> {
         self.database().write(move |connection| {
             let transaction = connection.transaction()?;
@@ -158,8 +168,11 @@ impl CatalogRepository {
                 }
             }
             for snapshot in &snapshots {
-                insert_site(&transaction, &snapshot.site)?;
-                insert_site_tags(&transaction, &snapshot.site.id, &snapshot.site.tag_ids)?;
+                // Deleted keychain credentials are not included in a site snapshot.
+                let mut site = snapshot.site.clone();
+                site.has_password = false;
+                insert_site(&transaction, &site)?;
+                insert_site_tags(&transaction, &site.id, &site.tag_ids)?;
             }
             transaction.commit()?;
             Ok(Mutation::Value(()))
@@ -199,16 +212,16 @@ fn references_exist(transaction: &Transaction<'_>, category_id: Option<&str>, ta
 
 fn insert_site(transaction: &Transaction<'_>, site: &Site) -> rusqlite::Result<()> {
     transaction.execute(
-        "INSERT INTO sites (id,name,domain,url,normalized_url,notes,category_id,is_pinned,auto_status,manual_status,failure_streak,last_checked_at,last_success_at,last_check_source,last_http_status,last_response_ms,last_check_error,created_at,updated_at,url_revision,row_revision) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)",
-        params![site.id,site.name,site.domain,site.url,site.normalized_url,site.notes,site.category_id,site.is_pinned,status(&site.auto_status),manual_status(&site.manual_status),site.failure_streak,site.last_checked_at,site.last_success_at,source(&site.last_check_source),site.last_http_status,site.last_response_ms,site.last_check_error,site.created_at,site.updated_at,site.url_revision,site.row_revision],
+        "INSERT INTO sites (id,name,domain,url,normalized_url,notes,category_id,is_pinned,auto_status,manual_status,failure_streak,last_checked_at,last_success_at,last_check_source,last_http_status,last_response_ms,last_check_error,created_at,updated_at,url_revision,row_revision,username,has_password) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23)",
+        params![site.id,site.name,site.domain,site.url,site.normalized_url,site.notes,site.category_id,site.is_pinned,status(&site.auto_status),manual_status(&site.manual_status),site.failure_streak,site.last_checked_at,site.last_success_at,source(&site.last_check_source),site.last_http_status,site.last_response_ms,site.last_check_error,site.created_at,site.updated_at,site.url_revision,site.row_revision,site.username,site.has_password],
     )?;
     Ok(())
 }
 
 fn update_site_row(transaction: &Transaction<'_>, site: &Site, expected_revision: u32) -> rusqlite::Result<usize> {
     transaction.execute(
-        "UPDATE sites SET name=?1,domain=?2,url=?3,normalized_url=?4,notes=?5,category_id=?6,is_pinned=?7,auto_status=?8,manual_status=?9,failure_streak=?10,last_checked_at=?11,last_success_at=?12,last_check_source=?13,last_http_status=?14,last_response_ms=?15,last_check_error=?16,updated_at=?17,url_revision=?18,row_revision=?19 WHERE id=?20 AND row_revision=?21",
-        params![site.name,site.domain,site.url,site.normalized_url,site.notes,site.category_id,site.is_pinned,status(&site.auto_status),manual_status(&site.manual_status),site.failure_streak,site.last_checked_at,site.last_success_at,source(&site.last_check_source),site.last_http_status,site.last_response_ms,site.last_check_error,site.updated_at,site.url_revision,site.row_revision,site.id,expected_revision],
+        "UPDATE sites SET name=?1,domain=?2,url=?3,normalized_url=?4,notes=?5,category_id=?6,is_pinned=?7,auto_status=?8,manual_status=?9,failure_streak=?10,last_checked_at=?11,last_success_at=?12,last_check_source=?13,last_http_status=?14,last_response_ms=?15,last_check_error=?16,updated_at=?17,url_revision=?18,row_revision=?19,username=?20,has_password=?21 WHERE id=?22 AND row_revision=?23",
+        params![site.name,site.domain,site.url,site.normalized_url,site.notes,site.category_id,site.is_pinned,status(&site.auto_status),manual_status(&site.manual_status),site.failure_streak,site.last_checked_at,site.last_success_at,source(&site.last_check_source),site.last_http_status,site.last_response_ms,site.last_check_error,site.updated_at,site.url_revision,site.row_revision,site.username,site.has_password,site.id,expected_revision],
     )
 }
 
@@ -219,7 +232,7 @@ fn insert_site_tags(transaction: &Transaction<'_>, site_id: &str, tag_ids: &[Str
 
 pub(crate) fn load_site(connection: &Connection, id: &str) -> rusqlite::Result<Option<Site>> {
     let mut site = connection.query_row(
-        "SELECT id,name,domain,url,normalized_url,notes,category_id,is_pinned,auto_status,manual_status,failure_streak,last_checked_at,last_success_at,last_check_source,last_http_status,last_response_ms,last_check_error,created_at,updated_at,url_revision,row_revision FROM sites WHERE id=?1",
+        "SELECT id,name,domain,url,normalized_url,notes,category_id,is_pinned,auto_status,manual_status,failure_streak,last_checked_at,last_success_at,last_check_source,last_http_status,last_response_ms,last_check_error,created_at,updated_at,url_revision,row_revision,username,has_password FROM sites WHERE id=?1",
         [id], site_from_row,
     ).optional()?;
     if let Some(site) = site.as_mut() {
@@ -237,7 +250,7 @@ pub(crate) fn site_from_row(row: &Row<'_>) -> rusqlite::Result<Site> {
         failure_streak: row.get(10)?, last_checked_at: row.get(11)?, last_success_at: row.get(12)?,
         last_check_source: row.get::<_, Option<String>>(13)?.map(parse_source), last_http_status: row.get(14)?,
         last_response_ms: row.get(15)?, last_check_error: row.get(16)?, created_at: row.get(17)?, updated_at: row.get(18)?,
-        url_revision: row.get(19)?, row_revision: row.get(20)?,
+        url_revision: row.get(19)?, row_revision: row.get(20)?, username: row.get(21)?, has_password: row.get(22)?,
     })
 }
 

@@ -144,10 +144,22 @@ fn open_connection(path: &PathBuf) -> Result<Connection, AppCommandError> {
             .execute_batch(include_str!("../../migrations/0001_initial.sql"))
             .map_err(map_sqlite_error)?;
         transaction
-            .pragma_update(None, "user_version", 1)
+            .execute_batch(include_str!("../../migrations/0002_credentials.sql"))
+            .map_err(map_sqlite_error)?;
+        transaction
+            .pragma_update(None, "user_version", 2)
             .map_err(map_sqlite_error)?;
         transaction.commit().map_err(map_sqlite_error)?;
-    } else if version != 1 {
+    } else if version == 1 {
+        let transaction = connection.transaction().map_err(map_sqlite_error)?;
+        transaction
+            .execute_batch(include_str!("../../migrations/0002_credentials.sql"))
+            .map_err(map_sqlite_error)?;
+        transaction
+            .pragma_update(None, "user_version", 2)
+            .map_err(map_sqlite_error)?;
+        transaction.commit().map_err(map_sqlite_error)?;
+    } else if version != 2 {
         return Err(AppCommandError::new(
             AppCommandErrorCode::Database,
             format!("Unsupported database schema version {version}."),

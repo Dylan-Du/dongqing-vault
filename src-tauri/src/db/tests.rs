@@ -8,7 +8,7 @@ use crate::error::AppCommandErrorCode;
 use super::{Database, MaintenanceGate};
 
 #[tokio::test]
-async fn migration_creates_v1_schema_and_foreign_keys() {
+async fn migration_creates_v2_schema_and_foreign_keys() {
     let directory = tempdir().unwrap();
     let database = Database::open(directory.path().join("data.sqlite3"))
         .await
@@ -36,7 +36,7 @@ async fn migration_creates_v1_schema_and_foreign_keys() {
             ] {
                 assert!(names.iter().any(|name| name == required), "missing {required}");
             }
-            assert_eq!(connection.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))?, 1);
+            assert_eq!(connection.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))?, 2);
             assert_eq!(connection.query_row("PRAGMA foreign_keys", [], |row| row.get::<_, i64>(0))?, 1);
 
             let invalid_category = connection.execute(
@@ -53,6 +53,32 @@ async fn migration_creates_v1_schema_and_foreign_keys() {
         })
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn migration_upgrades_existing_v1_sites_without_losing_data() {
+    let directory = tempdir().unwrap();
+    let path = directory.path().join("existing.sqlite3");
+    {
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        connection.execute_batch(include_str!("../../migrations/0001_initial.sql")).unwrap();
+        connection.execute(
+            "INSERT INTO sites (id,name,domain,url,normalized_url,notes,is_pinned,auto_status,failure_streak,created_at,updated_at) VALUES ('existing','Example','example.com','https://example.com','https://example.com','',0,'unchecked',0,'now','now')",
+            [],
+        ).unwrap();
+        connection.pragma_update(None, "user_version", 1).unwrap();
+    }
+    let database = Database::open(&path).await.unwrap();
+    database.read(|connection| {
+        let (username, has_password): (String, bool) = connection.query_row(
+            "SELECT username,has_password FROM sites WHERE id='existing'", [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        assert_eq!(username, "");
+        assert!(!has_password);
+        assert_eq!(connection.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))?, 2);
+        Ok(())
+    }).await.unwrap();
 }
 
 #[tokio::test]

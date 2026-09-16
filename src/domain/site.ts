@@ -9,6 +9,8 @@ export interface Site {
   url: string;
   normalizedUrl: string;
   notes: string;
+  username: string;
+  hasPassword: boolean;
   categoryId: string | null;
   tagIds: string[];
   isPinned: boolean;
@@ -60,6 +62,7 @@ export interface CreateSiteInput {
   domain: string;
   url: string;
   notes: string;
+  username: string;
   categoryId: string | null;
   tagIds: string[];
   isPinned: boolean;

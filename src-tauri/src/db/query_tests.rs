@@ -4,7 +4,7 @@ use crate::model::{AutoStatus, CreateSiteInput, SiteQuery, SiteSortBy, SortDirec
 use super::{CatalogRepository, Database};
 
 fn input(name: &str, url: &str, tags: Vec<String>) -> CreateSiteInput {
-    CreateSiteInput { name: name.into(), domain: String::new(), url: url.into(), notes: String::new(), category_id: None, tag_ids: tags, is_pinned: false, manual_status: None }
+    CreateSiteInput { name: name.into(), domain: String::new(), url: url.into(), notes: String::new(), username: String::new(), category_id: None, tag_ids: tags, is_pinned: false, manual_status: None }
 }
 
 #[tokio::test]

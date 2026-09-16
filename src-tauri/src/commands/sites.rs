@@ -28,7 +28,9 @@ pub async fn record_health_checks(repository: State<'_, CatalogRepository>, inpu
 
 #[tauri::command]
 pub async fn delete_sites(repository: State<'_, CatalogRepository>, ids: Vec<String>) -> Result<Vec<DeletedSiteSnapshot>, AppCommandError> {
-    repository.delete_sites(ids).await
+    let snapshots = repository.delete_sites(ids).await?;
+    super::credentials::remove_deleted_passwords(snapshots.iter().map(|snapshot| snapshot.site.id.clone()).collect()).await;
+    Ok(snapshots)
 }
 
 #[tauri::command]

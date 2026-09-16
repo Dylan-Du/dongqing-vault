@@ -41,6 +41,18 @@ export class TauriNativeBridge implements NativeBridge {
     return this.call("record_health_checks", results);
   }
 
+  getSitePassword(siteId: string): Promise<string> {
+    return this.invokeCommand("get_site_password", { siteId });
+  }
+
+  setSitePassword(siteId: string, password: string): Promise<Site> {
+    return this.invokeCommand("set_site_password", { siteId, password });
+  }
+
+  deleteSitePassword(siteId: string): Promise<Site> {
+    return this.invokeCommand("delete_site_password", { siteId });
+  }
+
   deleteSites(ids: string[]): Promise<DeletedSiteSnapshot[]> {
     return this.call("delete_sites", { ids });
   }

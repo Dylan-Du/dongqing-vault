@@ -34,6 +34,7 @@ export class MockNativeBridge implements NativeBridge {
   private categories: CategoryListItem[];
   private tags: TagListItem[];
   private nextId = 1;
+  private passwords = new Map<string, string>();
   readonly openedUrls: string[] = [];
 
   constructor(state: MockNativeBridgeState = {}) {
@@ -83,11 +84,13 @@ export class MockNativeBridge implements NativeBridge {
       url: normalizedUrl,
       normalizedUrl,
       notes: input.notes,
+      username: input.username.trim(),
       categoryId: input.categoryId,
       tagIds: [...input.tagIds],
       isPinned: input.isPinned,
       autoStatus: "unchecked",
       manualStatus: input.manualStatus,
+      hasPassword: false,
       failureStreak: 0,
       lastCheckedAt: null,
       lastSuccessAt: null,
@@ -129,6 +132,7 @@ export class MockNativeBridge implements NativeBridge {
       url: normalizedUrl,
       normalizedUrl,
       notes: input.notes,
+      username: input.username.trim(),
       categoryId: input.categoryId,
       tagIds: [...input.tagIds],
       isPinned: input.isPinned,
@@ -148,6 +152,28 @@ export class MockNativeBridge implements NativeBridge {
 
     this.sites[index] = cloneSite(updated);
     return cloneSite(updated);
+  }
+
+  async getSitePassword(siteId: string): Promise<string> {
+    const password = this.passwords.get(siteId);
+    if (password === undefined) throw createAppCommandError("not_found", "Password was not found.");
+    return password;
+  }
+
+  async setSitePassword(siteId: string, password: string): Promise<Site> {
+    const index = this.sites.findIndex((site) => site.id === siteId);
+    if (index === -1) throw createAppCommandError("not_found", `Site ${siteId} was not found.`);
+    this.passwords.set(siteId, password);
+    this.sites[index] = { ...this.sites[index], hasPassword: true, rowRevision: this.sites[index].rowRevision + 1 };
+    return cloneSite(this.sites[index]);
+  }
+
+  async deleteSitePassword(siteId: string): Promise<Site> {
+    const index = this.sites.findIndex((site) => site.id === siteId);
+    if (index === -1) throw createAppCommandError("not_found", `Site ${siteId} was not found.`);
+    this.passwords.delete(siteId);
+    this.sites[index] = { ...this.sites[index], hasPassword: false, rowRevision: this.sites[index].rowRevision + 1 };
+    return cloneSite(this.sites[index]);
   }
 
   async recordHealthChecks(results: HealthCheckResultInput[]): Promise<Site[]> {
@@ -186,6 +212,7 @@ export class MockNativeBridge implements NativeBridge {
 
     const idSet = new Set(ids);
     this.sites = this.sites.filter((site) => !idSet.has(site.id));
+    ids.forEach((id) => this.passwords.delete(id));
     return snapshots;
   }
 
@@ -199,7 +226,7 @@ export class MockNativeBridge implements NativeBridge {
       );
     }
 
-    this.sites.push(...snapshots.map((snapshot) => cloneSite(snapshot.site)));
+    this.sites.push(...snapshots.map((snapshot) => cloneSite({ ...snapshot.site, hasPassword: false })));
   }
 
   async listTaxonomy(): Promise<TaxonomySnapshot> {

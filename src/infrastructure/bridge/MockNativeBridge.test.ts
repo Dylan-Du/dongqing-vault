@@ -262,6 +262,19 @@ describe("health result persistence", () => {
   });
 });
 
+describe("optional website credentials", () => {
+  it("stores optional accounts and keeps the password out of site objects", async () => {
+    const bridge = new MockNativeBridge({ sites: [siteFixture({ id: "account", username: "person@example.com" })] });
+    const saved = await bridge.setSitePassword("account", "secret-example");
+    expect(saved).toMatchObject({ username: "person@example.com", hasPassword: true });
+    expect(JSON.stringify(saved)).not.toContain("secret-example");
+    expect(await bridge.getSitePassword("account")).toBe("secret-example");
+    const deleted = await bridge.deleteSitePassword("account");
+    expect(deleted.hasPassword).toBe(false);
+    await expect(bridge.getSitePassword("account")).rejects.toMatchObject({ code: "not_found" });
+  });
+});
+
 describe("site status helpers", () => {
   it("uses manual status as the effective status when present", () => {
     expect(

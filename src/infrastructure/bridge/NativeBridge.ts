@@ -33,6 +33,9 @@ export interface NativeBridge {
   createSite(input: CreateSiteInput): Promise<Site>;
   updateSite(input: UpdateSiteInput): Promise<Site>;
   recordHealthChecks(results: HealthCheckResultInput[]): Promise<Site[]>;
+  getSitePassword(siteId: string): Promise<string>;
+  setSitePassword(siteId: string, password: string): Promise<Site>;
+  deleteSitePassword(siteId: string): Promise<Site>;
   deleteSites(ids: string[]): Promise<DeletedSiteSnapshot[]>;
   restoreSites(snapshots: DeletedSiteSnapshot[]): Promise<void>;
   listTaxonomy(): Promise<TaxonomySnapshot>;

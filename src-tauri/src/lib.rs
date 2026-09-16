@@ -56,6 +56,9 @@ pub fn run() {
         .plugin(tauri_plugin_log::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             commands::desktop::open_urls,
+            commands::credentials::get_site_password,
+            commands::credentials::set_site_password,
+            commands::credentials::delete_site_password,
             commands::taxonomy::list_taxonomy,
             commands::taxonomy::create_category,
             commands::taxonomy::update_category,

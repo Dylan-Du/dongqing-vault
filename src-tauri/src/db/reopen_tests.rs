@@ -16,5 +16,5 @@ async fn reopen_swaps_connection_and_increments_generation() {
         .read(|connection| connection.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0)))
         .await
         .expect("read reopened database");
-    assert_eq!(version, 1);
+    assert_eq!(version, 2);
 }

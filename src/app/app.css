@@ -222,3 +222,21 @@ button { cursor: pointer; }
   .collection-toolbar { flex-wrap: wrap; }
   .search-box { flex-basis: 100%; }
 }
+
+
+/* Secure website credentials */
+.credential-section { border: 1px solid rgba(62, 99, 221, .18); border-radius: 12px; background: linear-gradient(135deg, rgba(62, 99, 221, .055), rgba(255, 255, 255, .65)); padding: 14px; }
+.credential-section-title { display: flex; align-items: center; gap: 9px; color: #3557b7; margin-bottom: 12px; }
+.credential-section-title div { display: grid; gap: 2px; }
+.credential-section-title strong { font-size: 13px; color: var(--ink); }
+.credential-section-title span { font-size: 11px; color: var(--muted); }
+.credential-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.password-input { position: relative; display: flex; align-items: center; }
+.password-input input { width: 100%; padding-right: 38px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .03em; }
+.password-input button { position: absolute; right: 5px; width: 30px; height: 30px; display: grid; place-items: center; border: 0; background: transparent; color: var(--muted); border-radius: 7px; }
+.password-input button:hover { background: rgba(62, 99, 221, .08); color: #3557b7; }
+.clear-password { margin-top: 6px; padding: 0; border: 0; background: transparent; color: #b54343; font-size: 11px; text-align: left; }
+.credential-summary { display: flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 10px; color: #6a78a0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-action.credential-action { color: #4668c9; background: rgba(70, 104, 201, .07); }
+.row-action.credential-action:hover { background: rgba(70, 104, 201, .14); }
+@media (max-width: 760px) { .credential-fields { grid-template-columns: 1fr; } }

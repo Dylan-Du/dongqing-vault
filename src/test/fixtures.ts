@@ -15,6 +15,8 @@ export function siteFixture(overrides: Partial<Site> = {}): Site {
     url,
     normalizedUrl: overrides.normalizedUrl ?? url,
     notes: "",
+    username: "",
+    hasPassword: false,
     categoryId: null,
     tagIds: [],
     isPinned: false,

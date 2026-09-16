@@ -79,6 +79,17 @@ describe("App", () => {
     expect(overview).toHaveTextContent("需要关注0待处理");
   });
 
+  it("shows credential copy actions only for configured website credentials", async () => {
+    const bridge = new MockNativeBridge({
+      sites: [siteFixture({ id: "credentials", username: "user@example.com", hasPassword: true })],
+    });
+    await bridge.setSitePassword("credentials", "secret-value");
+    render(<BridgeProvider bridge={bridge}><App /></BridgeProvider>);
+
+    expect(await screen.findByTitle("复制账号")).toBeVisible();
+    expect(screen.getByTitle("复制密码")).toBeVisible();
+  });
+
   it("filters the table to pinned sites when the pinned view is selected", async () => {
     render(<App />);
 

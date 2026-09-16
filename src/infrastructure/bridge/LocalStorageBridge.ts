@@ -40,6 +40,18 @@ export class LocalStorageBridge extends MockNativeBridge {
     return result;
   }
 
+  override async getSitePassword(_siteId: string): Promise<string> {
+    throw new Error("密码仅能在 macOS 桌面应用中使用钥匙串保存和读取。");
+  }
+
+  override async setSitePassword(_siteId: string, _password: string): Promise<Site> {
+    throw new Error("密码仅能在 macOS 桌面应用中使用钥匙串保存和读取。");
+  }
+
+  override async deleteSitePassword(_siteId: string): Promise<Site> {
+    throw new Error("密码仅能在 macOS 桌面应用中使用钥匙串保存和读取。");
+  }
+
   override async recordHealthChecks(results: HealthCheckResultInput[]): Promise<Site[]> {
     const updated = await super.recordHealthChecks(results);
     this.persist();
@@ -109,7 +121,7 @@ function readState(): MockNativeBridgeState {
       try {
         const parsed = JSON.parse(stored) as MockNativeBridgeState;
         if (Array.isArray(parsed.sites) && Array.isArray(parsed.categories) && Array.isArray(parsed.tags)) {
-          return parsed;
+          return { ...parsed, sites: parsed.sites.map((site) => ({ ...site, username: site.username ?? "", hasPassword: false })) };
         }
       } catch {
         // A malformed local preview snapshot is replaced by the starter data.
@@ -173,6 +185,8 @@ function site(
     url,
     normalizedUrl: url,
     notes,
+    username: "",
+    hasPassword: false,
     categoryId,
     tagIds,
     isPinned,
