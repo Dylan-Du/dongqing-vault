@@ -27,6 +27,7 @@ import {
   FileText,
   Folder,
   FolderPlus,
+  Globe,
   LayoutGrid,
   Pencil,
   Plus,
@@ -715,20 +716,38 @@ function EditorDrawer({ editor, categories, tags, onChange, onClose, onSave, onR
     if (!passwordVisible && editor.form.hasPassword && !editor.form.password && !await onRevealPassword()) return;
     setPasswordVisible((current) => !current);
   };
-  return <div className="modal-backdrop drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className="drawer" role="dialog" aria-modal="true" aria-labelledby="editor-title">
-      <div className="drawer-header"><div><h2 id="editor-title">{editor.siteId ? "编辑网站" : "添加网站"}</h2><p>网站信息保存在本机，密码由 macOS 钥匙串安全保管。</p></div><button className="close-button" type="button" onClick={onClose} aria-label="关闭"><X size={16} /></button></div>
-      <form onSubmit={onSave}><div className="form-grid">
-        <div className="form-field"><label htmlFor="site-name">网站名称</label><input id="site-name" value={editor.form.name} onChange={(event) => set({ name: event.target.value })} placeholder="例如：GitHub" /></div>
-        <div className="form-field"><label htmlFor="site-domain">域名</label><input id="site-domain" value={editor.form.domain} onChange={(event) => set({ domain: event.target.value })} placeholder="例如：github.com" /></div>
-        <div className="form-field full"><label htmlFor="site-url">网址 <span className="form-hint">支持自动补全 https://</span></label><input id="site-url" value={editor.form.url} onChange={(event) => set({ url: event.target.value })} placeholder="https://" required /></div>
-        <div className="credential-section full"><div className="credential-section-title"><KeyRound size={15} /><div><strong>登录信息</strong><span>选填 · 密码保存至 macOS 钥匙串</span></div></div><div className="credential-fields"><div className="form-field"><label htmlFor="site-username">账号</label><input id="site-username" value={editor.form.username} onChange={(event) => set({ username: event.target.value })} placeholder="邮箱或用户名" autoComplete="username" /></div><div className="form-field"><label htmlFor="site-password">密码</label><div className="password-input"><input id="site-password" type={passwordVisible ? "text" : "password"} value={editor.form.password} onChange={(event) => set({ password: event.target.value, passwordDirty: true })} placeholder={editor.form.hasPassword ? "••••••••（已保存）" : "可不填写"} autoComplete="new-password" /><button type="button" title={passwordVisible ? "隐藏密码" : "显示密码"} onClick={() => void togglePassword()}>{passwordVisible ? <EyeOff size={15} /> : <Eye size={15} />}</button></div>{editor.form.hasPassword && <button className="clear-password" type="button" onClick={() => set({ password: "", passwordDirty: true, hasPassword: false })}>删除已保存密码</button>}</div></div></div>
-        <div className="form-field"><label htmlFor="site-category">分类</label><select id="site-category" value={editor.form.categoryId ?? ""} onChange={(event) => set({ categoryId: event.target.value || null })}><option value="">未分类</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
-        <div className="form-field"><label>手动状态覆盖</label><select value={editor.form.manualStatus ?? ""} onChange={(event) => set({ manualStatus: (event.target.value || null) as ManualStatus })}><option value="">跟随自动检测</option><option value="available">标记为可用</option><option value="unavailable">标记为失效</option></select></div>
-        <div className="form-field full"><label>标签</label><div className="tag-picker">{tags.length ? tags.map((tag) => <button className={editor.form.tagIds.includes(tag.id) ? "selected" : ""} type="button" key={tag.id} onClick={() => set({ tagIds: editor.form.tagIds.includes(tag.id) ? editor.form.tagIds.filter((id) => id !== tag.id) : [...editor.form.tagIds, tag.id] })}><span style={{ background: tag.color }} />{tag.name}</button>) : <span className="form-hint">还没有标签</span>}</div></div>
-        <div className="form-field full"><label htmlFor="site-notes">备注</label><textarea id="site-notes" value={editor.form.notes} onChange={(event) => set({ notes: event.target.value })} rows={4} placeholder="记录用途、登录方式或其他说明…" /></div>
-        <label className="checkbox-row full"><input type="checkbox" checked={editor.form.isPinned} onChange={(event) => set({ isPinned: event.target.checked })} /><span>置顶这个网站</span></label>
-      </div><div className="form-actions"><button type="button" onClick={onClose}>取消</button><button className="primary-button" type="submit"><Check size={14} />保存网站</button></div></form>
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="modal editor-modal" role="dialog" aria-modal="true" aria-labelledby="editor-title">
+      <div className="modal-header"><div><h2 id="editor-title">{editor.siteId ? "编辑网站" : "添加网站"}</h2><p>网站信息保存在本机，密码由 macOS 钥匙串安全保管。</p></div><button className="close-button" type="button" onClick={onClose} aria-label="关闭"><X size={16} /></button></div>
+      <form onSubmit={onSave}>
+        <div className="editor-body-scroll">
+        <div className="editor-section">
+          <div className="editor-section-title"><Globe size={14} /><span>网站</span></div>
+          <div className="form-grid">
+            <div className="form-field"><label htmlFor="site-name">网站名称</label><input id="site-name" value={editor.form.name} onChange={(event) => set({ name: event.target.value })} placeholder="例如：GitHub" /></div>
+            <div className="form-field"><label htmlFor="site-domain">域名</label><input id="site-domain" value={editor.form.domain} onChange={(event) => set({ domain: event.target.value })} placeholder="例如：github.com" /></div>
+            <div className="form-field full"><label htmlFor="site-url">网址 <span className="form-hint">支持自动补全 https://</span></label><input id="site-url" value={editor.form.url} onChange={(event) => set({ url: event.target.value })} placeholder="https://" required /></div>
+          </div>
+        </div>
+        <div className="editor-section">
+          <div className="editor-section-title"><KeyRound size={14} /><span>登录信息</span><em>选填 · 密码保存至 macOS 钥匙串</em></div>
+          <div className="form-grid">
+            <div className="form-field"><label htmlFor="site-username">账号</label><input id="site-username" value={editor.form.username} onChange={(event) => set({ username: event.target.value })} placeholder="邮箱或用户名" autoComplete="username" /></div>
+            <div className="form-field"><label htmlFor="site-password">密码</label><div className="password-input"><input id="site-password" type={passwordVisible ? "text" : "password"} value={editor.form.password} onChange={(event) => set({ password: event.target.value, passwordDirty: true })} placeholder={editor.form.hasPassword ? "••••••••（已保存）" : "可不填写"} autoComplete="new-password" /><button type="button" title={passwordVisible ? "隐藏密码" : "显示密码"} onClick={() => void togglePassword()}>{passwordVisible ? <EyeOff size={15} /> : <Eye size={15} />}</button></div>{editor.form.hasPassword && <button className="clear-password" type="button" onClick={() => set({ password: "", passwordDirty: true, hasPassword: false })}>删除已保存密码</button>}</div>
+          </div>
+        </div>
+        <div className="editor-section">
+          <div className="editor-section-title"><Folder size={14} /><span>整理</span></div>
+          <div className="form-grid">
+            <div className="form-field"><label htmlFor="site-category">分类</label><select id="site-category" value={editor.form.categoryId ?? ""} onChange={(event) => set({ categoryId: event.target.value || null })}><option value="">未分类</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
+            <div className="form-field"><label>手动状态覆盖</label><select value={editor.form.manualStatus ?? ""} onChange={(event) => set({ manualStatus: (event.target.value || null) as ManualStatus })}><option value="">跟随自动检测</option><option value="available">标记为可用</option><option value="unavailable">标记为失效</option></select></div>
+            <div className="form-field full"><label>标签</label><div className="tag-picker">{tags.length ? tags.map((tag) => <button className={editor.form.tagIds.includes(tag.id) ? "tag-option selected" : "tag-option"} type="button" key={tag.id} onClick={() => set({ tagIds: editor.form.tagIds.includes(tag.id) ? editor.form.tagIds.filter((id) => id !== tag.id) : [...editor.form.tagIds, tag.id] })}><span style={{ background: tag.color }} />{tag.name}</button>) : <span className="form-hint">还没有标签</span>}</div></div>
+            <div className="form-field full"><label htmlFor="site-notes">备注</label><textarea id="site-notes" value={editor.form.notes} onChange={(event) => set({ notes: event.target.value })} rows={3} placeholder="记录用途、登录方式或其他说明…" /></div>
+          </div>
+        </div>
+        </div>
+        <div className="form-actions"><label className="pin-toggle"><input type="checkbox" checked={editor.form.isPinned} onChange={(event) => set({ isPinned: event.target.checked })} /><Star size={13} fill={editor.form.isPinned ? "currentColor" : "none"} />置顶</label><span className="form-actions-spacer" /><button type="button" className="secondary-button" onClick={onClose}>取消</button><button className="primary-button" type="submit"><Check size={14} />保存网站</button></div>
+      </form>
     </section>
   </div>;
 }

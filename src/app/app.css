@@ -240,3 +240,22 @@ button { cursor: pointer; }
 .row-action.credential-action { color: #4668c9; background: rgba(70, 104, 201, .07); }
 .row-action.credential-action:hover { background: rgba(70, 104, 201, .14); }
 @media (max-width: 760px) { .credential-fields { grid-template-columns: 1fr; } }
+
+/* Editor dialog */
+.editor-modal { width: min(640px, 100%); max-height: min(780px, calc(100vh - 48px)); display: flex; flex-direction: column; padding: 0; }
+.editor-modal .modal-header { flex: 0 0 auto; margin: 0; padding: 22px 24px 16px; border-bottom: 1px solid var(--line); }
+.editor-modal form { display: flex; flex-direction: column; min-height: 0; }
+.editor-body-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 24px 8px; scrollbar-width: thin; scrollbar-color: #d5ddea transparent; }
+.editor-section { padding: 16px 0 6px; }
+.editor-section + .editor-section { border-top: 1px solid var(--line); margin-top: 10px; }
+.editor-section-title { display: flex; align-items: center; gap: 7px; margin-bottom: 13px; color: var(--blue-strong); font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.editor-section-title em { margin-left: auto; color: var(--muted); font-size: 10px; font-style: normal; font-weight: 500; }
+.editor-modal .form-grid { gap: 13px; }
+.editor-modal .form-actions { flex: 0 0 auto; margin: 0; padding: 14px 24px 18px; border-top: 1px solid var(--line); background: #fcfdff; border-radius: 0 0 15px 15px; }
+.form-actions-spacer { flex: 1 1 auto; }
+.pin-toggle { display: inline-flex; align-items: center; gap: 7px; height: 35px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; color: #7c8aa2; background: #fff; font-size: 11px; font-weight: 600; cursor: pointer; }
+.pin-toggle:has(input:checked) { border-color: #b8c6ff; color: var(--blue-strong); background: #edf2ff; }
+.pin-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.pin-toggle:has(input:focus-visible) { outline: 2px solid #aebfff; outline-offset: 2px; }
+.editor-modal .password-input input { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .03em; }
+.tag-option span { display: inline-block; width: 5px; height: 5px; border-radius: 50%; }
