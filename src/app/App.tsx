@@ -627,6 +627,29 @@ export function App() {
   );
 }
 
+function BrandMark({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true" className="brand-mark-svg">
+      <defs>
+        <linearGradient id="brandMarkBg" x1="12" y1="8" x2="52" y2="58" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#7a9bff" />
+          <stop offset="1" stopColor="#2e51d6" />
+        </linearGradient>
+      </defs>
+      <rect width="64" height="64" rx="14.5" fill="url(#brandMarkBg)" />
+      <circle cx="32" cy="32" r="20.5" stroke="#fff" strokeWidth="4.6" />
+      {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
+        const rad = (deg * Math.PI) / 180;
+        const r0 = 15.4, r1 = 10.6;
+        return <line key={deg} x1={32 + r0 * Math.cos(rad)} y1={32 + r0 * Math.sin(rad)} x2={32 + r1 * Math.cos(rad)} y2={32 + r1 * Math.sin(rad)} stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />;
+      })}
+      <circle cx="32" cy="32" r="9.4" stroke="#fff" strokeWidth="3.4" />
+      <rect x="30.15" y="22.2" width="3.7" height="7.6" rx="1.85" fill="#fff" />
+      <circle cx="32" cy="34.4" r="1.85" fill="#fff" />
+    </svg>
+  );
+}
+
 function Sidebar(props: {
   view: ViewFilter;
   setView: (view: ViewFilter) => void;
@@ -645,7 +668,7 @@ function Sidebar(props: {
   return (
     <aside className="sidebar">
       <div className="sidebar-fixed">
-        <div className="brand-row"><div className="brand-mark">V</div><div><h1 className="brand-title">东青Vault</h1><span className="brand-subtitle">LINKS, READY.</span></div></div>
+        <div className="brand-row"><BrandMark size={32} /><div><h1 className="brand-title">东青Vault</h1><span className="brand-subtitle">LINKS, READY.</span></div></div>
         <button className="add-site-button" type="button" onClick={props.onAdd}><Plus size={16} />添加网站</button>
       </div>
       <div className="sidebar-scroll">
