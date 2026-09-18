@@ -168,9 +168,9 @@ button { cursor: pointer; }
 .form-field { display: flex; flex-direction: column; gap: 7px; }
 .form-field.full { grid-column: 1 / -1; }
 .form-field label { color: #69768f; font-size: 11px; font-weight: 650; }
-.form-field input, .form-field textarea, .form-field select { width: 100%; padding: 10px 11px; border: 1px solid var(--line); border-radius: 8px; outline: 0; color: var(--ink); background: #fbfcfe; font-size: 12px; }
+.form-field input, .form-field textarea, .form-field select { width: 100%; height: 35px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; outline: 0; color: var(--ink); background: #fbfcfe; font-size: 12px; }
+.form-field textarea { height: auto; min-height: 84px; padding: 10px 11px; resize: vertical; }
 .form-field input:focus, .form-field textarea:focus, .form-field select:focus { border-color: #aebfff; background: #fff; box-shadow: 0 0 0 3px rgba(79,124,255,.1); }
-.form-field textarea { min-height: 84px; resize: vertical; }
 .form-hint { color: #a3aec0; font-size: 10px; line-height: 1.4; }
 .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 9px; background: #fbfcfe; }
 .switch-copy strong { display: block; color: #63708a; font-size: 11px; }
