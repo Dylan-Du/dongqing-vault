@@ -16,8 +16,12 @@
 
 ## 下载
 
-- macOS Apple Silicon：[`东青Vault_0.1.0_aarch64.dmg`](./东青Vault_0.1.0_aarch64.dmg)
-- Windows x64：前往 [Releases](https://github.com/Dylan-Du/dongqing-vault/releases/latest) 下载 `.exe` 安装包
+**👉 [前往 Releases 页面下载最新版](https://github.com/Dylan-Du/dongqing-vault/releases/latest)**
+
+| 平台 | 文件 |
+|---|---|
+| macOS Apple Silicon (M1/M2/M3/M4) | `东青Vault_*_aarch64.dmg` |
+| Windows x64 | `Vault_*_x64-setup.exe` |
 
 当前安装包未配置代码签名或公证。macOS 首次打开时，如出现安全提示，可右键应用选择“打开”。
 
